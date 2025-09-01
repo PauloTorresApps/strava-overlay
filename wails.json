@@ -1,0 +1,31 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "strava-overlay",
+  "outputfilename": "Strava Add Overlay",
+  "frontend": {
+    "dir": "./frontend",
+    "build": "echo 'No build required'",
+    "dev": "echo 'No dev server required'",
+    "install": "echo 'No install required'"
+  },
+  "build": {
+    "targets": [
+      {
+        "platform": "darwin/amd64",
+        "arch": "amd64"
+      },
+      {
+        "platform": "darwin/arm64",
+        "arch": "arm64"
+      },
+      {
+        "platform": "windows/amd64",
+        "arch": "amd64"
+      },
+      {
+        "platform": "linux/amd64",
+        "arch": "amd64"
+      }
+    ]
+  }
+}

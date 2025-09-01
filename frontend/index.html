@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strava Add Overlay</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+</head>
+<body>
+    <div id="app">
+        <header class="header">
+            <h1>🚴‍♂️ Strava Add Overlay 🏃</h1>
+            <p>Adicione overlays de dados GPS aos seus vídeos</p>
+        </header>
+
+        <main class="container">
+            <!-- Seção de Autenticação -->
+            <section id="authSection" class="auth-section">
+                <h2>Conectar ao Strava</h2>
+                <button id="authBtn" class="btn-primary">Autenticar com Strava</button>
+                <div id="authStatus"></div>
+            </section>
+
+            <!-- Lista de Atividades -->
+            <section id="activitiesSection" class="activities-section hidden">
+                <h2>Suas Atividades com GPS</h2>
+                <div id="activitiesGrid" class="activities-grid"></div>
+            </section>
+
+            <!-- Detalhes da Atividade -->
+            <section id="activityDetail" class="activity-detail hidden">
+                <h2>Detalhes da Atividade</h2>
+                <div id="activityInfo"></div>
+                <div id="mapContainer" class="map-container"></div>
+            </section>
+
+            <!-- Upload de Vídeo -->
+            <section id="videoSection" class="video-section hidden">
+                <h2>Processar Vídeo</h2>
+                <div class="file-upload">
+                    <input type="file" id="videoInput" accept="video/*" />
+                    <label for="videoInput" class="file-label">
+                        Selecionar Vídeo
+                    </label>
+                </div>
+                <div id="videoInfo"></div>
+                <button id="processBtn" class="btn-primary" disabled>
+                    Processar com Overlay
+                </button>
+                <div id="progress" class="progress hidden">
+                    <div id="progressBar" class="progress-bar"></div>
+                    <span id="progressText">0%</span>
+                </div>
+                <div id="result"></div>
+            </section>
+        </main>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>
