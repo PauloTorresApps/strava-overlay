@@ -63,7 +63,8 @@ async function loadActivities() {
 function displayActivities(activities) {
     activitiesGrid.innerHTML = '';
     
-    if (activities.length === 0) {
+    // CORREÇÃO: Verifica se 'activities' é nulo ou se o tamanho é zero.
+    if (!activities || activities.length === 0) {
         activitiesGrid.innerHTML = '<p>Nenhuma atividade com GPS encontrada.</p>';
         return;
     }

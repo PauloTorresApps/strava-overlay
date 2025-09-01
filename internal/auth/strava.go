@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/pkg/browser"
 	"golang.org/x/oauth2"
 )
 
@@ -61,7 +62,7 @@ func (sa *StravaAuth) GetValidToken(ctx context.Context) (*oauth2.Token, error) 
 
 func (sa *StravaAuth) authorizeUser(ctx context.Context) (*oauth2.Token, error) {
 	state := sa.generateState()
-	
+
 	mux := http.NewServeMux()
 	tokenChan := make(chan *oauth2.Token, 1)
 	errChan := make(chan error, 1)
@@ -90,6 +91,13 @@ func (sa *StravaAuth) authorizeUser(ctx context.Context) (*oauth2.Token, error) 
 
 	authURL := sa.config.AuthCodeURL(state, oauth2.AccessTypeOffline)
 	fmt.Printf("Visit this URL to authorize: %s\n", authURL)
+
+	// Abre a URL de autorização no navegador padrão do usuário
+	err := browser.OpenURL(authURL)
+	if err != nil {
+		// Se não conseguir abrir o navegador, retorna o erro para que o usuário possa usar a URL do console
+		return nil, fmt.Errorf("failed to open browser for authentication: %w. Please visit the URL printed in the console", err)
+	}
 
 	select {
 	case token := <-tokenChan:
