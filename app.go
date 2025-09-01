@@ -7,12 +7,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/joho/godotenv"
 	"strava-overlay/internal/auth"
 	"strava-overlay/internal/gps"
 	"strava-overlay/internal/overlay"
 	"strava-overlay/internal/strava"
 	"strava-overlay/internal/video"
+
+	"github.com/joho/godotenv"
 )
 
 // App struct
@@ -62,7 +63,7 @@ func (a *App) GetActivities() ([]strava.Activity, error) {
 		return nil, fmt.Errorf("not authenticated")
 	}
 
-	return a.stravaClient.GetActivities(20)
+	return a.stravaClient.GetActivities()
 }
 
 // GetActivityDetail retrieves detailed activity information

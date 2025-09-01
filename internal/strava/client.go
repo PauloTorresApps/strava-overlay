@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -16,17 +18,17 @@ type Client struct {
 }
 
 type Activity struct {
-	ID               int64     `json:"id"`
-	Name             string    `json:"name"`
-	Type             string    `json:"type"`
-	StartDate        time.Time `json:"start_date"`
-	Distance         float64   `json:"distance"`
-	MovingTime       int       `json:"moving_time"`
-	MaxSpeed         float64   `json:"max_speed"`
-	HasHeartrate     bool      `json:"has_heartrate"`
-	StartLatLng      []float64 `json:"start_latlng"`
-	EndLatLng        []float64 `json:"end_latlng"`
-	Map              Map       `json:"map"`
+	ID           int64     `json:"id"`
+	Name         string    `json:"name"`
+	Type         string    `json:"type"`
+	StartDate    time.Time `json:"start_date"`
+	Distance     float64   `json:"distance"`
+	MovingTime   int       `json:"moving_time"`
+	MaxSpeed     float64   `json:"max_speed"`
+	HasHeartrate bool      `json:"has_heartrate"`
+	StartLatLng  []float64 `json:"start_latlng"`
+	EndLatLng    []float64 `json:"end_latlng"`
+	Map          Map       `json:"map"`
 }
 
 type Map struct {
@@ -49,40 +51,75 @@ type ActivityStream struct {
 func NewClient(token *oauth2.Token) *Client {
 	config := &oauth2.Config{}
 	client := config.Client(context.Background(), token)
-	
+
 	return &Client{
 		httpClient: client,
 		baseURL:    "https://www.strava.com/api/v3",
 	}
 }
 
-func (c *Client) GetActivities(limit int) ([]Activity, error) {
-	url := fmt.Sprintf("%s/athlete/activities?per_page=%d", c.baseURL, limit)
-	
-	resp, err := c.httpClient.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+func (c *Client) GetActivities() ([]Activity, error) {
+	allActivities := make([]Activity, 0)
+	page := 1
+	perPage := 100
 
-	var activities []Activity
-	if err := json.NewDecoder(resp.Body).Decode(&activities); err != nil {
-		return nil, err
+	log.Println("DEBUG: Iniciando busca de atividades no Strava...")
+
+	for {
+		url := fmt.Sprintf("%s/athlete/activities?page=%d&per_page=%d", c.baseURL, page, perPage)
+		log.Printf("DEBUG: Buscando atividades da URL: %s", url)
+
+		resp, err := c.httpClient.Get(url)
+		if err != nil {
+			log.Printf("ERRO: Falha ao fazer a requisição para o Strava: %v", err)
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Printf("ERRO: Falha ao ler o corpo da resposta: %v", err)
+			return nil, err
+		}
+
+		log.Printf("DEBUG: Resposta recebida do Strava (página %d): %s", page, string(body))
+
+		var pageActivities []Activity
+		if err := json.Unmarshal(body, &pageActivities); err != nil {
+			log.Printf("ERRO: Falha ao decodificar o JSON das atividades: %v", err)
+			return nil, err
+		}
+
+		log.Printf("DEBUG: %d atividades decodificadas da página %d.", len(pageActivities), page)
+
+		if len(pageActivities) == 0 {
+			log.Println("DEBUG: Nenhuma atividade retornada na página atual, encerrando busca.")
+			break
+		}
+
+		allActivities = append(allActivities, pageActivities...)
+		page++
 	}
 
-	var gpsActivities []Activity
-	for _, activity := range activities {
-		if len(activity.StartLatLng) > 0 && activity.Map.Polyline != "" {
+	log.Printf("DEBUG: Total de atividades brutas encontradas: %d", len(allActivities))
+
+	gpsActivities := make([]Activity, 0)
+	for _, activity := range allActivities {
+		// CORREÇÃO: Apenas verificamos se existe um resumo de mapa (polyline).
+		// Esta é a melhor forma de saber se a atividade tem um trajeto de GPS.
+		if activity.Map.SummaryPolyline != "" {
 			gpsActivities = append(gpsActivities, activity)
 		}
 	}
+
+	log.Printf("DEBUG: Total de atividades com GPS após o filtro: %d", len(gpsActivities))
 
 	return gpsActivities, nil
 }
 
 func (c *Client) GetActivityDetail(activityID int64) (*ActivityDetail, error) {
 	url := fmt.Sprintf("%s/activities/%d", c.baseURL, activityID)
-	
+
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
 		return nil, err
@@ -98,9 +135,9 @@ func (c *Client) GetActivityDetail(activityID int64) (*ActivityDetail, error) {
 }
 
 func (c *Client) GetActivityStreams(activityID int64) (map[string]ActivityStream, error) {
-	url := fmt.Sprintf("%s/activities/%d/streams?keys=time,latlng,velocity_smooth,altitude&key_by_type=true", 
+	url := fmt.Sprintf("%s/activities/%d/streams?keys=time,latlng,velocity_smooth,altitude&key_by_type=true",
 		c.baseURL, activityID)
-	
+
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
 		return nil, err
