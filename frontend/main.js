@@ -154,37 +154,77 @@ function displayActivityDetail(detail) {
 }
 
 function displayMap(activity) {
-    console.log("Tentando exibir mapa para a atividade:", activity);
+    console.log("Inicializando mapa para a atividade:", activity.name);
+    
     try {
+        // Remove mapa anterior se existir
         if (activityMap) {
             activityMap.remove();
             activityMap = null;
         }
+        
+        // Remove marcador do vídeo anterior
+        if (videoStartMarker) {
+            videoStartMarker = null;
+        }
+        
         if (activity.map && activity.map.summary_polyline) {
+            // Inicializa o mapa
             activityMap = L.map('mapContainer');
+            
+            // Adiciona camada de tiles
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors'
             }).addTo(activityMap);
+            
+            // Decodifica e adiciona a rota
             const latlngs = L.Polyline.fromEncoded(activity.map.summary_polyline).getLatLngs();
             const polyline = L.polyline(latlngs, { color: '#f85149', weight: 3 }).addTo(activityMap);
+            
+            // Ajusta visualização para mostrar toda a rota
             activityMap.fitBounds(polyline.getBounds());
+            
+            // Adiciona marcadores de início e fim
             L.marker(latlngs[0]).addTo(activityMap).bindPopup('🏁 Início');
             L.marker(latlngs[latlngs.length - 1]).addTo(activityMap).bindPopup('🏆 Fim');
+            
+            console.log("Mapa inicializado com sucesso");
+            
         } else if (activity.start_latlng && activity.start_latlng.length === 2) {
+            // Fallback para atividades sem polyline
             activityMap = L.map('mapContainer').setView([activity.start_latlng[0], activity.start_latlng[1]], 13);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(activityMap);
-            L.marker([activity.start_latlng[0], activity.start_latlng[1]]).addTo(activityMap).bindPopup('🏁 Início da atividade');
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+                attribution: '© OpenStreetMap contributors' 
+            }).addTo(activityMap);
+            L.marker([activity.start_latlng[0], activity.start_latlng[1]]).addTo(activityMap)
+                .bindPopup('🏁 Início da atividade');
         } else {
-            console.log("Nenhum dado de mapa (nem polyline, nem start_latlng) encontrado para esta atividade.");
+            console.log("Nenhum dado de mapa disponível para esta atividade.");
+            document.getElementById('mapContainer').innerHTML = `<div class="error">Mapa não disponível para esta atividade.</div>`;
+            return;
         }
+        
     } catch (error) {
         console.error("ERRO AO EXIBIR O MAPA:", error);
-        document.getElementById('mapContainer').innerHTML = `<div class="error">Não foi possível carregar o mapa.</div>`;
+        document.getElementById('mapContainer').innerHTML = `<div class="error">Erro ao carregar o mapa: ${error.message}</div>`;
     }
 }
 
-// Substitua esta função inteira em frontend/main.js
-// Substitua esta função inteira em frontend/main.js
+// Função para aguardar o mapa estar pronto
+function waitForMapReady() {
+    return new Promise((resolve) => {
+        if (!activityMap) {
+            resolve(false);
+            return;
+        }
+        
+        // Aguarda o mapa estar completamente carregado
+        activityMap.whenReady(() => {
+            setTimeout(resolve, 100); // Buffer adicional
+        });
+    });
+}
+
 async function selectVideo() {
     try {
         const path = await window.go.main.App.SelectVideoFile();
@@ -202,38 +242,69 @@ async function selectVideo() {
         `;
         processBtn.disabled = false;
 
+        // Busca o ponto GPS correspondente ao início do vídeo
+        console.log("Buscando ponto GPS para sincronização...");
         const point = await window.go.main.App.GetGPSPointForVideoTime(selectedActivity.id, path);
-        if (point && point.Lat && point.Lng) {
+        
+        if (point && point.lat && point.lng) {
+            console.log(`Ponto GPS encontrado: ${point.lat}, ${point.lng}`);
+            
+            // Remove marcador anterior se existir
             if (videoStartMarker) {
                 videoStartMarker.remove();
+                videoStartMarker = null;
             }
+
+            // Verifica se o mapa existe
+            if (!activityMap) {
+                console.error("Mapa não está inicializado");
+                return;
+            }
+
+            // Cria ícone azul para o início do vídeo
             const blueIcon = new L.Icon({
                 iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
                 shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-                iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+                iconSize: [25, 41], 
+                iconAnchor: [12, 41], 
+                popupAnchor: [1, -34], 
+                shadowSize: [41, 41]
             });
 
-            videoStartMarker = L.marker([point.Lat, point.Lng], { icon: blueIcon })
+            // Adiciona marcador do início do vídeo
+            videoStartMarker = L.marker([point.lat, point.lng], { icon: blueIcon })
                 .addTo(activityMap)
                 .bindPopup('▶️ Início do Vídeo')
                 .openPopup();
 
-            // --- CORREÇÃO FINAL ---
-            // Força o mapa a se redimensionar e, em seguida, aplica o zoom.
-            // O setTimeout garante que a renderização do marcador seja concluída antes do zoom.
-            setTimeout(() => {
-                if (activityMap) {
-                    activityMap.invalidateSize();
-                    activityMap.setView([point.Lat, point.Lng], 18);
-                }
-            }, 100); // 100ms de espera
+            console.log("Marcador adicionado, ajustando visualização...");
 
+            // Aguarda um momento e então ajusta a visualização
+            setTimeout(() => {
+                try {
+                    // Force o mapa a recalcular seu tamanho
+                    activityMap.invalidateSize();
+                    
+                    // Centraliza no ponto do vídeo com zoom alto
+                    activityMap.setView([point.lat, point.lng], 16);
+                    
+                    console.log("Mapa centralizado no ponto do vídeo");
+                } catch (error) {
+                    console.error("Erro ao centralizar mapa:", error);
+                }
+            }, 200);
+
+        } else {
+            console.warn("Nenhum ponto GPS encontrado para o horário do vídeo");
+            showMessage(result, 'Não foi possível encontrar dados GPS para o horário do vídeo', 'error');
         }
+
     } catch (error) {
         console.error("Erro ao selecionar o vídeo:", error);
         showMessage(result, `Erro ao selecionar vídeo: ${error}`, 'error');
     }
 }
+
 
 async function processVideo() {
     if (!selectedActivity || !selectedVideoPath) {

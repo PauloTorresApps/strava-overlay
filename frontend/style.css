@@ -258,3 +258,55 @@ body {
         grid-template-columns: 1fr;
     }
 }
+
+/* Adicione estes estilos ao final do arquivo frontend/style.css */
+
+/* Melhorias para o mapa */
+.map-container {
+    height: 400px;
+    border-radius: 6px;
+    margin: 1rem 0;
+    background: #21262d;
+    border: 1px solid #30363d;
+    position: relative;
+}
+
+/* Customização dos popups do Leaflet */
+.leaflet-popup-content-wrapper {
+    background: #161b22 !important;
+    color: #c9d1d9 !important;
+    border: 1px solid #30363d !important;
+    border-radius: 6px !important;
+}
+
+.leaflet-popup-content {
+    color: #c9d1d9 !important;
+    font-size: 0.9rem !important;
+    line-height: 1.4 !important;
+}
+
+.leaflet-popup-tip {
+    background: #161b22 !important;
+    border: 1px solid #30363d !important;
+}
+
+/* Indicador de loading para o mapa */
+.map-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #8b949e;
+    font-size: 0.9rem;
+}
+
+/* Erro no mapa */
+.map-container .error {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #ffa198;
+    font-size: 0.9rem;
+}

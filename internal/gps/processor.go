@@ -60,15 +60,45 @@ func (gp *GPSProcessor) ProcessStreamData(timeData, latlngData, velocityData, al
 	return nil
 }
 
+// GetPointsForTimeRange coleta todos os pontos GPS dentro de um intervalo de tempo.
+// Aprimorada para garantir cobertura completa do intervalo.
 func (gp *GPSProcessor) GetPointsForTimeRange(startTime, endTime time.Time) []GPSPoint {
 	var result []GPSPoint
 
+	// Primeiro, encontra o ponto mais próximo ao início
+	startPoint, startFound := gp.GetPointForTime(startTime)
+	if !startFound {
+		return result
+	}
+
+	// Encontra o ponto mais próximo ao fim
+	endPoint, endFound := gp.GetPointForTime(endTime)
+	if !endFound {
+		return result
+	}
+
+	// Coleta todos os pontos entre o ponto inicial e final (inclusive)
+	collecting := false
 	for _, point := range gp.points {
-		if (point.Time.Equal(startTime) || point.Time.After(startTime)) &&
-			(point.Time.Equal(endTime) || point.Time.Before(endTime)) {
+		// Inicia coleta quando atinge o ponto inicial
+		if point.Time.Equal(startPoint.Time) {
+			collecting = true
+		}
+
+		if collecting {
 			result = append(result, point)
 		}
+
+		// Para coleta quando atinge o ponto final
+		if point.Time.Equal(endPoint.Time) {
+			break
+		}
 	}
+
+	// Log de debug para verificar a sincronização
+	fmt.Printf("DEBUG: Vídeo inicia em %s, termina em %s\n", startTime.Format("15:04:05"), endTime.Format("15:04:05"))
+	fmt.Printf("DEBUG: GPS inicia em %s, termina em %s\n", startPoint.Time.Format("15:04:05"), endPoint.Time.Format("15:04:05"))
+	fmt.Printf("DEBUG: Coletados %d pontos GPS para o vídeo\n", len(result))
 
 	return result
 }
@@ -101,15 +131,29 @@ func (gp *GPSProcessor) calculateGForce(from, to GPSPoint) float64 {
 	return acceleration / 9.81
 }
 
-// GetPointForTime encontra o primeiro ponto GPS em ou após um tempo específico.
+// GetPointForTime encontra o ponto GPS mais próximo a um tempo específico.
+// Em caso de empate, prefere o ponto com tempo maior (posterior).
 func (gp *GPSProcessor) GetPointForTime(targetTime time.Time) (GPSPoint, bool) {
+	if len(gp.points) == 0 {
+		return GPSPoint{}, false
+	}
+
+	var closestPoint GPSPoint
+	var minDiff time.Duration
+	found := false
+
 	for _, point := range gp.points {
-		if !point.Time.Before(targetTime) {
-			return point, true
+		diff := point.Time.Sub(targetTime)
+		if diff < 0 {
+			diff = -diff // valor absoluto
+		}
+
+		if !found || diff < minDiff || (diff == minDiff && point.Time.After(closestPoint.Time)) {
+			closestPoint = point
+			minDiff = diff
+			found = true
 		}
 	}
-	if len(gp.points) > 0 {
-		return gp.points[len(gp.points)-1], true
-	}
-	return GPSPoint{}, false
+
+	return closestPoint, found
 }

@@ -135,15 +135,16 @@ func (a *App) GetActivityDetail(activityID int64) (*strava.ActivityDetail, error
 }
 
 // GetGPSPointForVideoTime finds the GPS point corresponding to a video's start time
-// Substitua esta função em app.go
 func (a *App) GetGPSPointForVideoTime(activityID int64, videoPath string) (FrontendGPSPoint, error) {
 	if a.stravaClient == nil {
 		return FrontendGPSPoint{}, fmt.Errorf("not authenticated")
 	}
+
 	videoMeta, err := video.GetVideoMetadata(videoPath)
 	if err != nil {
 		return FrontendGPSPoint{}, fmt.Errorf("failed to get video metadata: %w", err)
 	}
+
 	detail, err := a.stravaClient.GetActivityDetail(activityID)
 	if err != nil {
 		return FrontendGPSPoint{}, fmt.Errorf("failed to get activity detail: %w", err)
@@ -158,18 +159,26 @@ func (a *App) GetGPSPointForVideoTime(activityID int64, videoPath string) (Front
 		log.Printf("Aviso: fuso horário desconhecido '%s', usando UTC como padrão. Erro: %v", ianaTZ, err)
 		location = time.UTC
 	}
+
 	correctedVideoStartTime := time.Date(
 		videoTimeUTC.Year(), videoTimeUTC.Month(), videoTimeUTC.Day(),
 		videoTimeUTC.Hour(), videoTimeUTC.Minute(), videoTimeUTC.Second(), videoTimeUTC.Nanosecond(),
 		location,
 	)
-	log.Printf("DEBUG: Hora do vídeo corrigida para o fuso horário da atividade: %s", correctedVideoStartTime)
+
+	// DEBUG: Informações de sincronização
+	fmt.Printf("=== SINCRONIZAÇÃO GPS-VÍDEO ===\n")
+	fmt.Printf("Vídeo criado em (UTC): %s\n", videoTimeUTC.Format("2006-01-02 15:04:05"))
+	fmt.Printf("Fuso da atividade: %s (%s)\n", detail.Timezone, ianaTZ)
+	fmt.Printf("Vídeo corrigido para: %s\n", correctedVideoStartTime.Format("2006-01-02 15:04:05"))
+	fmt.Printf("Atividade iniciou em: %s\n", detail.StartDate.Format("2006-01-02 15:04:05"))
 	// --- FIM DA LÓGICA DE CORREÇÃO ---
 
 	streams, err := a.stravaClient.GetActivityStreams(activityID)
 	if err != nil {
 		return FrontendGPSPoint{}, fmt.Errorf("failed to get activity streams: %w", err)
 	}
+
 	processor := gps.NewGPSProcessor()
 	err = processor.ProcessStreamData(
 		streams["time"].Data.([]interface{}), streams["latlng"].Data.([]interface{}),
@@ -180,10 +189,17 @@ func (a *App) GetGPSPointForVideoTime(activityID int64, videoPath string) (Front
 		return FrontendGPSPoint{}, fmt.Errorf("failed to process GPS data: %w", err)
 	}
 
-	point, found := processor.GetPointForTime(correctedVideoStartTime) // Usa a hora corrigida
+	point, found := processor.GetPointForTime(correctedVideoStartTime)
 	if !found {
 		return FrontendGPSPoint{}, fmt.Errorf("no matching GPS point found for the video start time")
 	}
+
+	// DEBUG: Ponto GPS encontrado
+	timeDiff := point.Time.Sub(correctedVideoStartTime)
+	fmt.Printf("Ponto GPS mais próximo: %s (diferença: %v)\n", point.Time.Format("15:04:05"), timeDiff)
+	fmt.Printf("Coordenadas: %.6f, %.6f\n", point.Lat, point.Lng)
+	fmt.Printf("===========================\n")
+
 	return FrontendGPSPoint{
 		Time: point.Time.Format(time.RFC3339), Lat: point.Lat, Lng: point.Lng,
 		Velocity: point.Velocity, Altitude: point.Altitude, Bearing: point.Bearing, GForce: point.GForce,
