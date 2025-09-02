@@ -2,7 +2,9 @@
 let selectedActivity = null;
 let activityMap = null;
 let videoStartMarker = null;
-let selectedVideoPath = ""; // Guarda o caminho completo do vídeo selecionado
+let selectedVideoPath = "";
+let tileCache = new Map(); // Cache de tiles
+let mapBounds = null; // Cache dos bounds da atividade
 
 // DOM elements
 const authBtn = document.getElementById('authBtn');
@@ -29,6 +31,41 @@ processBtn.addEventListener('click', processVideo);
 
 function initApp() {
     console.log('Strava Add Overlay iniciado');
+    preloadMapResources();
+}
+
+// Pré-carrega recursos do mapa
+function preloadMapResources() {
+    // Pre-cache comum tiles do OpenStreetMap
+    const commonTiles = [
+        'https://a.tile.openstreetmap.org/10/512/512.png',
+        'https://b.tile.openstreetmap.org/10/513/512.png',
+        'https://c.tile.openstreetmap.org/10/512/513.png'
+    ];
+    
+    commonTiles.forEach(url => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = url;
+    });
+}
+
+// Tile layer otimizado com cache
+function createOptimizedTileLayer() {
+    return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+        tileSize: 256,
+        crossOrigin: true,
+        // Cache por 1 hora
+        cacheTimeout: 3600000,
+        // Carrega tiles extras para suavizar navegação
+        keepBuffer: 4,
+        // Otimizações de performance
+        updateWhenIdle: false,
+        updateWhenZooming: false,
+        reuseTiles: true
+    });
 }
 
 async function authenticateStrava() {
@@ -109,7 +146,7 @@ async function selectActivity(activity, cardElement) {
         
         const detail = await window.go.main.App.GetActivityDetail(activity.id);
         displayActivityDetail(detail);
-        displayMap(activity);
+        await displayMap(activity);
         
         activityDetail.classList.remove('hidden');
         videoSection.classList.remove('hidden');
@@ -210,21 +247,6 @@ function displayMap(activity) {
     }
 }
 
-// Função para aguardar o mapa estar pronto
-function waitForMapReady() {
-    return new Promise((resolve) => {
-        if (!activityMap) {
-            resolve(false);
-            return;
-        }
-        
-        // Aguarda o mapa estar completamente carregado
-        activityMap.whenReady(() => {
-            setTimeout(resolve, 100); // Buffer adicional
-        });
-    });
-}
-
 async function selectVideo() {
     try {
         const path = await window.go.main.App.SelectVideoFile();
@@ -305,6 +327,20 @@ async function selectVideo() {
     }
 }
 
+// Função para aguardar o mapa estar pronto
+function waitForMapReady() {
+    return new Promise((resolve) => {
+        if (!activityMap) {
+            resolve(false);
+            return;
+        }
+        
+        // Aguarda o mapa estar completamente carregado
+        activityMap.whenReady(() => {
+            setTimeout(resolve, 100); // Buffer adicional
+        });
+    });
+}
 
 async function processVideo() {
     if (!selectedActivity || !selectedVideoPath) {

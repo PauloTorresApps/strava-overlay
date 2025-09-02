@@ -135,6 +135,8 @@ func (a *App) GetActivityDetail(activityID int64) (*strava.ActivityDetail, error
 }
 
 // GetGPSPointForVideoTime finds the GPS point corresponding to a video's start time
+// Substitua a função GetGPSPointForVideoTime em app.go
+
 func (a *App) GetGPSPointForVideoTime(activityID int64, videoPath string) (FrontendGPSPoint, error) {
 	if a.stravaClient == nil {
 		return FrontendGPSPoint{}, fmt.Errorf("not authenticated")
@@ -150,13 +152,13 @@ func (a *App) GetGPSPointForVideoTime(activityID int64, videoPath string) (Front
 		return FrontendGPSPoint{}, fmt.Errorf("failed to get activity detail: %w", err)
 	}
 
-	// --- LÓGICA DE CORREÇÃO DE FUSO HORÁRIO ---
+	// Correção de fuso horário
 	videoTimeUTC := videoMeta.CreationTime
 	tzParts := strings.Split(detail.Timezone, " ")
 	ianaTZ := tzParts[len(tzParts)-1]
 	location, err := time.LoadLocation(ianaTZ)
 	if err != nil {
-		log.Printf("Aviso: fuso horário desconhecido '%s', usando UTC como padrão. Erro: %v", ianaTZ, err)
+		log.Printf("Aviso: fuso horário desconhecido '%s', usando UTC. Erro: %v", ianaTZ, err)
 		location = time.UTC
 	}
 
@@ -166,23 +168,30 @@ func (a *App) GetGPSPointForVideoTime(activityID int64, videoPath string) (Front
 		location,
 	)
 
-	// DEBUG: Informações de sincronização
+	// Debug
 	fmt.Printf("=== SINCRONIZAÇÃO GPS-VÍDEO ===\n")
-	fmt.Printf("Vídeo criado em (UTC): %s\n", videoTimeUTC.Format("2006-01-02 15:04:05"))
-	fmt.Printf("Fuso da atividade: %s (%s)\n", detail.Timezone, ianaTZ)
-	fmt.Printf("Vídeo corrigido para: %s\n", correctedVideoStartTime.Format("2006-01-02 15:04:05"))
-	fmt.Printf("Atividade iniciou em: %s\n", detail.StartDate.Format("2006-01-02 15:04:05"))
-	// --- FIM DA LÓGICA DE CORREÇÃO ---
+	fmt.Printf("Vídeo (UTC): %s\n", videoTimeUTC.Format("15:04:05"))
+	fmt.Printf("Vídeo (corrigido): %s\n", correctedVideoStartTime.Format("15:04:05"))
+	fmt.Printf("Atividade: %s\n", detail.StartDate.Format("15:04:05"))
 
 	streams, err := a.stravaClient.GetActivityStreams(activityID)
 	if err != nil {
 		return FrontendGPSPoint{}, fmt.Errorf("failed to get activity streams: %w", err)
 	}
 
+	// Valida streams
+	timeStream, timeExists := streams["time"]
+	latlngStream, latlngExists := streams["latlng"]
+	if !timeExists || !latlngExists || timeStream.Data == nil || latlngStream.Data == nil {
+		return FrontendGPSPoint{}, fmt.Errorf("streams GPS ausentes ou vazios")
+	}
+
 	processor := gps.NewGPSProcessor()
 	err = processor.ProcessStreamData(
-		streams["time"].Data.([]interface{}), streams["latlng"].Data.([]interface{}),
-		streams["velocity_smooth"].Data.([]interface{}), streams["altitude"].Data.([]interface{}),
+		streams["time"].Data.([]interface{}),
+		streams["latlng"].Data.([]interface{}),
+		streams["velocity_smooth"].Data.([]interface{}),
+		streams["altitude"].Data.([]interface{}),
 		detail.StartDate,
 	)
 	if err != nil {
@@ -191,18 +200,29 @@ func (a *App) GetGPSPointForVideoTime(activityID int64, videoPath string) (Front
 
 	point, found := processor.GetPointForTime(correctedVideoStartTime)
 	if !found {
-		return FrontendGPSPoint{}, fmt.Errorf("no matching GPS point found for the video start time")
+		return FrontendGPSPoint{}, fmt.Errorf("no matching GPS point found")
 	}
 
-	// DEBUG: Ponto GPS encontrado
-	timeDiff := point.Time.Sub(correctedVideoStartTime)
-	fmt.Printf("Ponto GPS mais próximo: %s (diferença: %v)\n", point.Time.Format("15:04:05"), timeDiff)
-	fmt.Printf("Coordenadas: %.6f, %.6f\n", point.Lat, point.Lng)
+	// Validação final das coordenadas
+	if point.Lat == 0 && point.Lng == 0 {
+		return FrontendGPSPoint{}, fmt.Errorf("coordenadas GPS inválidas (0,0)")
+	}
+	if point.Lat < -90 || point.Lat > 90 || point.Lng < -180 || point.Lng > 180 {
+		return FrontendGPSPoint{}, fmt.Errorf("coordenadas GPS fora dos limites válidos")
+	}
+
+	fmt.Printf("Ponto encontrado: %.6f, %.6f em %s\n",
+		point.Lat, point.Lng, point.Time.Format("15:04:05"))
 	fmt.Printf("===========================\n")
 
 	return FrontendGPSPoint{
-		Time: point.Time.Format(time.RFC3339), Lat: point.Lat, Lng: point.Lng,
-		Velocity: point.Velocity, Altitude: point.Altitude, Bearing: point.Bearing, GForce: point.GForce,
+		Time:     point.Time.Format(time.RFC3339),
+		Lat:      point.Lat,
+		Lng:      point.Lng,
+		Velocity: point.Velocity,
+		Altitude: point.Altitude,
+		Bearing:  point.Bearing,
+		GForce:   point.GForce,
 	}, nil
 }
 
