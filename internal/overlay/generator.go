@@ -19,9 +19,10 @@ type Generator struct {
 
 func NewGenerator() *Generator {
 	tempDir, _ := os.MkdirTemp("", "strava_overlays_")
+	// Resolução aumentada para uma imagem mais nítida
 	return &Generator{
-		width:   350,
-		height:  350,
+		width:   800,
+		height:  800,
 		tempDir: tempDir,
 	}
 }
@@ -64,9 +65,12 @@ func (g *Generator) generateSpeedometerImage(point gps.GPSPoint, maxSpeed float6
 	dc.SetRGBA(0, 0, 0, 0)
 	dc.Clear()
 
+	// Fator de escala para converter as dimensões originais para a nova resolução
+	scaleFactor := float64(g.width) / 350.0
+
 	centerX := float64(g.width) / 2
 	centerY := float64(g.height) / 2
-	radius := 85.0
+	radius := 85.0 * scaleFactor
 	currentSpeed := point.Velocity * 3.6
 
 	// === VELOCÍMETRO CIRCULAR ===
@@ -75,7 +79,7 @@ func (g *Generator) generateSpeedometerImage(point gps.GPSPoint, maxSpeed float6
 	dc.Fill()
 
 	// Marcações de velocidade
-	dc.SetFontFace(basicfont.Face7x13)
+	dc.SetFontFace(basicfont.Face7x13) // Nota: esta fonte não escala perfeitamente.
 	steps := int(maxSpeed / 5)
 	startAngle := 135 * math.Pi / 180
 	totalArc := 270 * math.Pi / 180
@@ -84,18 +88,18 @@ func (g *Generator) generateSpeedometerImage(point gps.GPSPoint, maxSpeed float6
 		speed := float64(i) * 5
 		angle := startAngle + (speed/maxSpeed)*totalArc
 
-		x1 := centerX + (radius-12)*math.Cos(angle)
-		y1 := centerY + (radius-12)*math.Sin(angle)
-		x2 := centerX + (radius-5)*math.Cos(angle)
-		y2 := centerY + (radius-5)*math.Sin(angle)
+		x1 := centerX + (radius-(12*scaleFactor))*math.Cos(angle)
+		y1 := centerY + (radius-(12*scaleFactor))*math.Sin(angle)
+		x2 := centerX + (radius-(5*scaleFactor))*math.Cos(angle)
+		y2 := centerY + (radius-(5*scaleFactor))*math.Sin(angle)
 
 		dc.SetRGBA(0.5, 0.5, 0.5, 1)
-		dc.SetLineWidth(2)
+		dc.SetLineWidth(2 * scaleFactor)
 		dc.DrawLine(x1, y1, x2, y2)
 		dc.Stroke()
 
 		if i%2 == 0 {
-			textRadius := radius - 26
+			textRadius := radius - (26 * scaleFactor)
 			textX := centerX + textRadius*math.Cos(angle)
 			textY := centerY + textRadius*math.Sin(angle)
 			dc.SetRGBA(0.9, 0.9, 0.9, 1)
@@ -110,16 +114,15 @@ func (g *Generator) generateSpeedometerImage(point gps.GPSPoint, maxSpeed float6
 	}
 	progressAngle := startAngle + (progressRatio * totalArc)
 
-	dc.SetLineWidth(6)
+	dc.SetLineWidth(6 * scaleFactor)
 	r := progressRatio * 1.2
-	greenVal := (1 - progressRatio) * 0.5 // Variável 'g' renomeada para 'greenVal'
+	greenVal := (1 - progressRatio) * 0.5
 	b := (1 - progressRatio)
 	dc.SetRGBA(r, greenVal, b, 1)
-	dc.DrawArc(centerX, centerY, radius+6, startAngle, progressAngle)
+	dc.DrawArc(centerX, centerY, radius+(6*scaleFactor), startAngle, progressAngle)
 	dc.Stroke()
 
 	// Pontos cardeais
-	dc.SetFontFace(basicfont.Face7x13)
 	cardinals := []struct {
 		text  string
 		angle float64
@@ -128,8 +131,8 @@ func (g *Generator) generateSpeedometerImage(point gps.GPSPoint, maxSpeed float6
 	}
 	for _, card := range cardinals {
 		angleRad := card.angle * math.Pi / 180
-		x := centerX + (radius+20)*math.Cos(angleRad)
-		y := centerY + (radius+20)*math.Sin(angleRad)
+		x := centerX + (radius+(20*scaleFactor))*math.Cos(angleRad)
+		y := centerY + (radius+(20*scaleFactor))*math.Sin(angleRad)
 		dc.SetRGBA(0.8, 0.8, 0.8, 1)
 		dc.DrawStringAnchored(card.text, x, y, 0.5, 0.5)
 	}
@@ -157,45 +160,43 @@ func (g *Generator) generateSpeedometerImage(point gps.GPSPoint, maxSpeed float6
 
 	// Centro da bússola
 	dc.SetRGBA(0.1, 0.1, 0.1, 1)
-	dc.DrawCircle(centerX, centerY, 6)
+	dc.DrawCircle(centerX, centerY, 6*scaleFactor)
 	dc.Fill()
 	dc.SetRGBA(1, 0, 0, 0.9)
-	dc.DrawCircle(centerX, centerY, 3)
+	dc.DrawCircle(centerX, centerY, 3*scaleFactor)
 	dc.Fill()
 
 	// === DISPLAY DIGITAL DE VELOCIDADE ===
 	digitalY := centerY + radius*0.5
-	dc.SetFontFace(basicfont.Face7x13)
 	dc.SetRGBA(0, 1, 0, 1)
 	dc.DrawStringAnchored(fmt.Sprintf("%.1f", currentSpeed), centerX, digitalY, 0.5, 0.5)
-	dc.SetFontFace(basicfont.Face7x13)
-	dc.DrawStringAnchored("km/h", centerX, digitalY+12, 0.5, 0.5)
+	dc.DrawStringAnchored("km/h", centerX, digitalY+(12*scaleFactor), 0.5, 0.5)
 
 	// === G-FORCE ===
-	gForceRadius := 25.0
-	gX := centerX - radius - gForceRadius - 4
+	gForceRadius := 25.0 * scaleFactor
+	gX := centerX - radius - gForceRadius - (4 * scaleFactor)
 	gY := centerY - radius*0.6
 
 	dc.SetRGBA(0.1, 0.1, 0.1, 0.85)
 	dc.DrawCircle(gX, gY, gForceRadius)
 	dc.Fill()
 	dc.SetRGBA(0, 1, 0, 1)
-	dc.SetLineWidth(2)
+	dc.SetLineWidth(2 * scaleFactor)
 	dc.DrawCircle(gX, gY, gForceRadius)
 	dc.Stroke()
 	dc.SetRGBA(0.9, 0.9, 0.9, 1)
 	dc.DrawStringAnchored(fmt.Sprintf("%.1fG", math.Abs(point.GForce)), gX, gY, 0.5, 0.5)
 
 	// === ALTÍMETRO ===
-	altRadius := 25.0
-	altX := centerX - radius - altRadius - 4
+	altRadius := 25.0 * scaleFactor
+	altX := centerX - radius - altRadius - (4 * scaleFactor)
 	altY := centerY + radius*0.6
 
 	dc.SetRGBA(0.1, 0.1, 0.1, 0.85)
 	dc.DrawCircle(altX, altY, altRadius)
 	dc.Fill()
 	dc.SetRGBA(0, 1, 1, 1)
-	dc.SetLineWidth(2)
+	dc.SetLineWidth(2 * scaleFactor)
 	dc.DrawCircle(altX, altY, altRadius)
 	dc.Stroke()
 	dc.SetRGBA(0.9, 0.9, 0.9, 1)
