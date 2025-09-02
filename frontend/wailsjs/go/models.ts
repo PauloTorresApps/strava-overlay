@@ -1,37 +1,19 @@
-export namespace strava {
+export namespace main {
 	
-	export class Map {
-	    id: string;
-	    polyline: string;
-	    summary_polyline: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new Map(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.polyline = source["polyline"];
-	        this.summary_polyline = source["summary_polyline"];
-	    }
-	}
-	export class Activity {
+	export class FrontendActivity {
 	    id: number;
 	    name: string;
 	    type: string;
-	    // Go type: time
-	    start_date: any;
+	    start_date: string;
 	    distance: number;
 	    moving_time: number;
 	    max_speed: number;
-	    has_heartrate: boolean;
 	    start_latlng: number[];
 	    end_latlng: number[];
-	    map: Map;
+	    map: strava.Map;
 	
 	    static createFrom(source: any = {}) {
-	        return new Activity(source);
+	        return new FrontendActivity(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -39,14 +21,13 @@ export namespace strava {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.type = source["type"];
-	        this.start_date = this.convertValues(source["start_date"], null);
+	        this.start_date = source["start_date"];
 	        this.distance = source["distance"];
 	        this.moving_time = source["moving_time"];
 	        this.max_speed = source["max_speed"];
-	        this.has_heartrate = source["has_heartrate"];
 	        this.start_latlng = source["start_latlng"];
 	        this.end_latlng = source["end_latlng"];
-	        this.map = this.convertValues(source["map"], Map);
+	        this.map = this.convertValues(source["map"], strava.Map);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -67,12 +48,58 @@ export namespace strava {
 		    return a;
 		}
 	}
+	export class FrontendGPSPoint {
+	    time: string;
+	    lat: number;
+	    lng: number;
+	    velocity: number;
+	    altitude: number;
+	    bearing: number;
+	    gForce: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new FrontendGPSPoint(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.time = source["time"];
+	        this.lat = source["lat"];
+	        this.lng = source["lng"];
+	        this.velocity = source["velocity"];
+	        this.altitude = source["altitude"];
+	        this.bearing = source["bearing"];
+	        this.gForce = source["gForce"];
+	    }
+	}
+
+}
+
+export namespace strava {
+	
+	export class Map {
+	    id: string;
+	    polyline: string;
+	    summary_polyline: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Map(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.polyline = source["polyline"];
+	        this.summary_polyline = source["summary_polyline"];
+	    }
+	}
 	export class ActivityDetail {
 	    id: number;
 	    name: string;
 	    type: string;
 	    // Go type: time
 	    start_date: any;
+	    timezone: string;
 	    distance: number;
 	    moving_time: number;
 	    max_speed: number;
@@ -93,6 +120,7 @@ export namespace strava {
 	        this.name = source["name"];
 	        this.type = source["type"];
 	        this.start_date = this.convertValues(source["start_date"], null);
+	        this.timezone = source["timezone"];
 	        this.distance = source["distance"];
 	        this.moving_time = source["moving_time"];
 	        this.max_speed = source["max_speed"];

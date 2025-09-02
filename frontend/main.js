@@ -1,6 +1,8 @@
 // Global variables
 let selectedActivity = null;
 let activityMap = null;
+let videoStartMarker = null;
+let selectedVideoPath = ""; // Guarda o caminho completo do vídeo selecionado
 
 // DOM elements
 const authBtn = document.getElementById('authBtn');
@@ -11,7 +13,7 @@ const activityDetail = document.getElementById('activityDetail');
 const activityInfo = document.getElementById('activityInfo');
 const mapContainer = document.getElementById('mapContainer');
 const videoSection = document.getElementById('videoSection');
-const videoInput = document.getElementById('videoInput');
+const selectVideoBtn = document.getElementById('selectVideoBtn');
 const videoInfo = document.getElementById('videoInfo');
 const processBtn = document.getElementById('processBtn');
 const progress = document.getElementById('progress');
@@ -22,7 +24,7 @@ const result = document.getElementById('result');
 // Event listeners
 document.addEventListener('DOMContentLoaded', initApp);
 authBtn.addEventListener('click', authenticateStrava);
-videoInput.addEventListener('change', handleVideoUpload);
+selectVideoBtn.addEventListener('click', selectVideo);
 processBtn.addEventListener('click', processVideo);
 
 function initApp() {
@@ -63,7 +65,6 @@ async function loadActivities() {
 function displayActivities(activities) {
     activitiesGrid.innerHTML = '';
     
-    // CORREÇÃO: Verifica se 'activities' é nulo ou se o tamanho é zero.
     if (!activities || activities.length === 0) {
         activitiesGrid.innerHTML = '<p>Nenhuma atividade com GPS encontrada.</p>';
         return;
@@ -80,7 +81,7 @@ function createActivityCard(activity) {
     card.className = 'activity-card';
     card.onclick = () => selectActivity(activity, card);
     
-    const date = formatDate(activity.start_date);
+    const date = formatDate(new Date(activity.start_date));
     const distance = (activity.distance / 1000).toFixed(2);
     const duration = formatDuration(activity.moving_time);
     const maxSpeed = activity.max_speed ? (activity.max_speed * 3.6).toFixed(1) : 'N/A';
@@ -99,21 +100,17 @@ function createActivityCard(activity) {
 
 async function selectActivity(activity, cardElement) {
     try {
-        // Remove seleção anterior
         document.querySelectorAll('.activity-card.selected').forEach(el => {
             el.classList.remove('selected');
         });
         
-        // Adiciona seleção atual
         cardElement.classList.add('selected');
         selectedActivity = activity;
         
-        // Carrega detalhes
         const detail = await window.go.main.App.GetActivityDetail(activity.id);
         displayActivityDetail(detail);
         displayMap(activity);
         
-        // Mostra seções
         activityDetail.classList.remove('hidden');
         videoSection.classList.remove('hidden');
         
@@ -123,8 +120,9 @@ async function selectActivity(activity, cardElement) {
 }
 
 function displayActivityDetail(detail) {
-    const date = formatDate(detail.start_date);
-    const time = formatTime(detail.start_date);
+    const startDate = new Date(detail.start_date);
+    const date = formatDate(startDate);
+    const time = formatTime(startDate);
     const distance = (detail.distance / 1000).toFixed(2);
     const duration = formatDuration(detail.moving_time);
     const elevation = detail.total_elevation_gain ? detail.total_elevation_gain.toFixed(0) : 'N/A';
@@ -155,104 +153,104 @@ function displayActivityDetail(detail) {
     `;
 }
 
-// Substitua a função inteira em /frontend/main.js
 function displayMap(activity) {
-    // Adiciona log para depuração. Veremos este objeto no console do navegador.
     console.log("Tentando exibir mapa para a atividade:", activity);
-
     try {
         if (activityMap) {
             activityMap.remove();
             activityMap = null;
         }
-        
-        // CORREÇÃO: Voltando a usar 'summary_polyline' que é o nome correto do campo JSON.
         if (activity.map && activity.map.summary_polyline) {
             activityMap = L.map('mapContainer');
-            
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors'
             }).addTo(activityMap);
-            
             const latlngs = L.Polyline.fromEncoded(activity.map.summary_polyline).getLatLngs();
-            
             const polyline = L.polyline(latlngs, { color: '#f85149', weight: 3 }).addTo(activityMap);
-            
             activityMap.fitBounds(polyline.getBounds());
-            
             L.marker(latlngs[0]).addTo(activityMap).bindPopup('🏁 Início');
             L.marker(latlngs[latlngs.length - 1]).addTo(activityMap).bindPopup('🏆 Fim');
-
         } else if (activity.start_latlng && activity.start_latlng.length === 2) {
-            // Fallback caso não haja trajeto
             activityMap = L.map('mapContainer').setView([activity.start_latlng[0], activity.start_latlng[1]], 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(activityMap);
             L.marker([activity.start_latlng[0], activity.start_latlng[1]]).addTo(activityMap).bindPopup('🏁 Início da atividade');
         } else {
-             console.log("Nenhum dado de mapa (nem polyline, nem start_latlng) encontrado para esta atividade.");
+            console.log("Nenhum dado de mapa (nem polyline, nem start_latlng) encontrado para esta atividade.");
         }
     } catch (error) {
-        // Se qualquer erro ocorrer, ele será impresso no console.
         console.error("ERRO AO EXIBIR O MAPA:", error);
-        // Opcional: mostrar uma mensagem de erro na UI
         document.getElementById('mapContainer').innerHTML = `<div class="error">Não foi possível carregar o mapa.</div>`;
     }
 }
 
-function handleVideoUpload(event) {
-    const file = event.target.files[0];
-    if (!file) {
-        videoInfo.innerHTML = '';
-        processBtn.disabled = true;
-        return;
+// Substitua esta função inteira em frontend/main.js
+// Substitua esta função inteira em frontend/main.js
+async function selectVideo() {
+    try {
+        const path = await window.go.main.App.SelectVideoFile();
+        if (!path) {
+            return;
+        }
+
+        selectedVideoPath = path;
+
+        const fileName = path.split(/[\\/]/).pop();
+        videoInfo.innerHTML = `
+            <h4>Vídeo Selecionado</h4>
+            <p><strong>Arquivo:</strong> ${fileName}</p>
+            <p><strong>Caminho:</strong> ${path}</p>
+        `;
+        processBtn.disabled = false;
+
+        const point = await window.go.main.App.GetGPSPointForVideoTime(selectedActivity.id, path);
+        if (point && point.Lat && point.Lng) {
+            if (videoStartMarker) {
+                videoStartMarker.remove();
+            }
+            const blueIcon = new L.Icon({
+                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+            });
+
+            videoStartMarker = L.marker([point.Lat, point.Lng], { icon: blueIcon })
+                .addTo(activityMap)
+                .bindPopup('▶️ Início do Vídeo')
+                .openPopup();
+
+            // --- CORREÇÃO FINAL ---
+            // Força o mapa a se redimensionar e, em seguida, aplica o zoom.
+            // O setTimeout garante que a renderização do marcador seja concluída antes do zoom.
+            setTimeout(() => {
+                if (activityMap) {
+                    activityMap.invalidateSize();
+                    activityMap.setView([point.Lat, point.Lng], 18);
+                }
+            }, 100); // 100ms de espera
+
+        }
+    } catch (error) {
+        console.error("Erro ao selecionar o vídeo:", error);
+        showMessage(result, `Erro ao selecionar vídeo: ${error}`, 'error');
     }
-    
-    const size = (file.size / (1024 * 1024)).toFixed(2);
-    const type = file.type;
-    
-    videoInfo.innerHTML = `
-        <h4>Vídeo Selecionado</h4>
-        <p><strong>Nome:</strong> ${file.name}</p>
-        <p><strong>Tamanho:</strong> ${size} MB</p>
-        <p><strong>Tipo:</strong> ${type}</p>
-        <p><strong>Modificado:</strong> ${formatDate(file.lastModified)}</p>
-    `;
-    
-    processBtn.disabled = false;
 }
 
 async function processVideo() {
-    if (!selectedActivity || !videoInput.files[0]) {
+    if (!selectedActivity || !selectedVideoPath) {
         showMessage(result, 'Selecione uma atividade e um vídeo', 'error');
         return;
     }
-    
     try {
         processBtn.disabled = true;
         processBtn.textContent = 'Processando...';
         progress.classList.remove('hidden');
         result.innerHTML = '';
-        
-        // Simula progresso
         simulateProgress();
-        
-        const videoPath = videoInput.files[0].path || videoInput.files[0].name;
-        const outputPath = await window.go.main.App.ProcessVideoOverlay(
-            selectedActivity.id,
-            videoPath
-        );
-        
-        // Finaliza progresso
+        const outputPath = await window.go.main.App.ProcessVideoOverlay(selectedActivity.id, selectedVideoPath);
         updateProgress(100);
-        
-        showMessage(result, `
-            Vídeo processado com sucesso!<br>
-            <strong>Local:</strong> ${outputPath}
-        `, 'success');
-        
+        showMessage(result, `Vídeo processado com sucesso!<br><strong>Local:</strong> ${outputPath}`, 'success');
     } catch (error) {
         showMessage(result, `Erro no processamento: ${error}`, 'error');
-        
     } finally {
         processBtn.disabled = false;
         processBtn.textContent = 'Processar com Overlay';
@@ -264,14 +262,14 @@ async function processVideo() {
 }
 
 function simulateProgress() {
-    let progress = 0;
+    let currentProgress = 0;
     const interval = setInterval(() => {
-        progress += Math.random() * 15;
-        if (progress > 90) {
-            progress = 90;
+        currentProgress += Math.random() * 15;
+        if (currentProgress > 90) {
+            currentProgress = 90;
             clearInterval(interval);
         }
-        updateProgress(progress);
+        updateProgress(currentProgress);
     }, 800);
 }
 
@@ -284,13 +282,11 @@ function showMessage(container, message, type) {
     container.innerHTML = `<div class="${type}">${message}</div>`;
 }
 
-function formatDate(dateString) {
-    const date = new Date(dateString);
+function formatDate(date) {
     return date.toLocaleDateString('pt-BR');
 }
 
-function formatTime(dateString) {
-    const date = new Date(dateString);
+function formatTime(date) {
     return date.toLocaleTimeString('pt-BR', { 
         hour: '2-digit', 
         minute: '2-digit' 

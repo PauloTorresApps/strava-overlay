@@ -20,6 +20,7 @@ type Activity struct {
 	Name         string    `json:"name"`
 	Type         string    `json:"type"`
 	StartDate    time.Time `json:"start_date"`
+	Timezone     string    `json:"timezone"`
 	Distance     float64   `json:"distance"`
 	MovingTime   int       `json:"moving_time"`
 	MaxSpeed     float64   `json:"max_speed"`

@@ -34,7 +34,7 @@ func (gp *GPSProcessor) ProcessStreamData(timeData, latlngData, velocityData, al
 	for i := 0; i < len(timeData); i++ {
 		timeOffset := timeData[i].(float64)
 		latlng := latlngData[i].([]interface{})
-		
+
 		point := GPSPoint{
 			Time: startTime.Add(time.Duration(timeOffset) * time.Second),
 			Lat:  latlng[0].(float64),
@@ -62,10 +62,10 @@ func (gp *GPSProcessor) ProcessStreamData(timeData, latlngData, velocityData, al
 
 func (gp *GPSProcessor) GetPointsForTimeRange(startTime, endTime time.Time) []GPSPoint {
 	var result []GPSPoint
-	
+
 	for _, point := range gp.points {
-		if (point.Time.Equal(startTime) || point.Time.After(startTime)) && 
-		   (point.Time.Equal(endTime) || point.Time.Before(endTime)) {
+		if (point.Time.Equal(startTime) || point.Time.After(startTime)) &&
+			(point.Time.Equal(endTime) || point.Time.Before(endTime)) {
 			result = append(result, point)
 		}
 	}
@@ -92,11 +92,24 @@ func (gp *GPSProcessor) calculateGForce(from, to GPSPoint) float64 {
 
 	deltaV := to.Velocity - from.Velocity
 	deltaT := to.Time.Sub(from.Time).Seconds()
-	
+
 	if deltaT == 0 {
 		return 0
 	}
 
 	acceleration := deltaV / deltaT
 	return acceleration / 9.81
+}
+
+// GetPointForTime encontra o primeiro ponto GPS em ou após um tempo específico.
+func (gp *GPSProcessor) GetPointForTime(targetTime time.Time) (GPSPoint, bool) {
+	for _, point := range gp.points {
+		if !point.Time.Before(targetTime) {
+			return point, true
+		}
+	}
+	if len(gp.points) > 0 {
+		return gp.points[len(gp.points)-1], true
+	}
+	return GPSPoint{}, false
 }

@@ -14,6 +14,14 @@ export function GetActivityDetail(arg1) {
   return window['go']['main']['App']['GetActivityDetail'](arg1);
 }
 
+export function GetGPSPointForVideoTime(arg1, arg2) {
+  return window['go']['main']['App']['GetGPSPointForVideoTime'](arg1, arg2);
+}
+
 export function ProcessVideoOverlay(arg1, arg2) {
   return window['go']['main']['App']['ProcessVideoOverlay'](arg1, arg2);
+}
+
+export function SelectVideoFile() {
+  return window['go']['main']['App']['SelectVideoFile']();
 }
