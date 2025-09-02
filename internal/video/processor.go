@@ -45,7 +45,7 @@ func (p *Processor) ApplyOverlays(inputVideo string, overlayImages []string, out
 		"-f", "concat", // formato concatenação
 		"-safe", "0", // permite caminhos absolutos
 		"-i", listFile, // lista de overlays
-		"-filter_complex", "[1:v]scale=200:200[overlay];[0:v][overlay]overlay=10:H-210", // redimensiona e posiciona overlay
+		"-filter_complex", "[1:v]scale=250:180[overlay];[0:v][overlay]overlay=10:H-190", // redimensiona e posiciona overlay
 		"-c:a", "copy", // copia áudio sem recodificar
 		"-c:v", "libx264", // codec de vídeo
 		"-preset", "medium", // preset de qualidade/velocidade
@@ -80,16 +80,6 @@ func (p *Processor) createImageListWithDuration(images []string, listFile string
 	// Adiciona última imagem sem duração (necessário para concat)
 	if len(images) > 0 {
 		content.WriteString(fmt.Sprintf("file '%s'\n", images[len(images)-1]))
-	}
-
-	return os.WriteFile(listFile, []byte(content.String()), 0644)
-}
-
-func (p *Processor) createImageList(images []string, listFile string) error {
-	var content strings.Builder
-	for _, img := range images {
-		content.WriteString(fmt.Sprintf("file '%s'\n", img))
-		content.WriteString("duration 0.033333\n")
 	}
 
 	return os.WriteFile(listFile, []byte(content.String()), 0644)
