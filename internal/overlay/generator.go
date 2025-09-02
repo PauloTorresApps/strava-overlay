@@ -180,17 +180,18 @@ func (g *Generator) drawCompass(dc *gg.Context, x, y, radius, bearing float64) {
 	dc.SetFontFace(basicfont.Face7x13)
 	for _, card := range cardinals {
 		angleRad := card.angle * math.Pi / 180
-		// DISTÂNCIA AUMENTADA: 50px além da borda do velocímetro
-		textX := x + (radius+50)*math.Cos(angleRad)
-		textY := y + (radius+50)*math.Sin(angleRad)
+		// DISTÂNCIA FINAL: 62px da borda
+		textX := x + (radius+62)*math.Cos(angleRad)
+		textY := y + (radius+62)*math.Sin(angleRad)
 
-		// Background para legibilidade
-		dc.SetRGBA(0, 0, 0, 0.7)
-		dc.DrawCircle(textX, textY, 10)
-		dc.Fill()
-
+		// FONTE DEFINIDA SEM FUNDO
 		dc.SetRGBA(card.r, card.g, card.b, 1)
-		dc.DrawStringAnchored(card.text, textX, textY, 0.5, 0.5)
+		// Grid 2x2 para definição aumentada
+		for dx := -0.5; dx <= 0.5; dx += 0.5 {
+			for dy := -0.5; dy <= 0.5; dy += 0.5 {
+				dc.DrawStringAnchored(card.text, textX+dx, textY+dy, 0.5, 0.5)
+			}
+		}
 	}
 
 	// AGULHA COM BASE LARGA
