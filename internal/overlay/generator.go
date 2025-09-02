@@ -121,7 +121,7 @@ func (g *Generator) generateSpeedometerImage(point gps.GPSPoint, maxSpeed float6
 		}
 	}
 
-	// ARCO PROGRESSO
+	// ARCO PROGRESSO - ADJACENTE À BORDA
 	progressRatio := currentSpeed / maxSpeed
 	if progressRatio > 1 {
 		progressRatio = 1
@@ -129,7 +129,7 @@ func (g *Generator) generateSpeedometerImage(point gps.GPSPoint, maxSpeed float6
 	progressAngle := startAngle + (progressRatio * totalArc)
 	dc.SetLineWidth(8)
 	dc.SetRGBA(0.1, 1, 0.1, 0.9)
-	dc.DrawArc(centerX, centerY, radius+8, startAngle, progressAngle)
+	dc.DrawArc(centerX, centerY, radius, startAngle, progressAngle) // Removido +8
 	dc.Stroke()
 
 	// BÚSSOLA DESTACADA
