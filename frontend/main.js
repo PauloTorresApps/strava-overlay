@@ -155,33 +155,47 @@ function displayActivityDetail(detail) {
     `;
 }
 
+// Substitua a função inteira em /frontend/main.js
 function displayMap(activity) {
-    // Remove mapa anterior
-    if (activityMap) {
-        activityMap.remove();
-    }
-    
-    if (activity.start_latlng && activity.start_latlng.length === 2) {
-        activityMap = L.map('mapContainer').setView(
-            [activity.start_latlng[0], activity.start_latlng[1]], 
-            13
-        );
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(activityMap);
-        
-        // Marcador de início
-        L.marker([activity.start_latlng[0], activity.start_latlng[1]])
-            .addTo(activityMap)
-            .bindPopup('🏁 Início da atividade');
-        
-        // Marcador de fim
-        if (activity.end_latlng && activity.end_latlng.length === 2) {
-            L.marker([activity.end_latlng[0], activity.end_latlng[1]])
-                .addTo(activityMap)
-                .bindPopup('🏆 Fim da atividade');
+    // Adiciona log para depuração. Veremos este objeto no console do navegador.
+    console.log("Tentando exibir mapa para a atividade:", activity);
+
+    try {
+        if (activityMap) {
+            activityMap.remove();
+            activityMap = null;
         }
+        
+        // CORREÇÃO: Voltando a usar 'summary_polyline' que é o nome correto do campo JSON.
+        if (activity.map && activity.map.summary_polyline) {
+            activityMap = L.map('mapContainer');
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(activityMap);
+            
+            const latlngs = L.Polyline.fromEncoded(activity.map.summary_polyline).getLatLngs();
+            
+            const polyline = L.polyline(latlngs, { color: '#f85149', weight: 3 }).addTo(activityMap);
+            
+            activityMap.fitBounds(polyline.getBounds());
+            
+            L.marker(latlngs[0]).addTo(activityMap).bindPopup('🏁 Início');
+            L.marker(latlngs[latlngs.length - 1]).addTo(activityMap).bindPopup('🏆 Fim');
+
+        } else if (activity.start_latlng && activity.start_latlng.length === 2) {
+            // Fallback caso não haja trajeto
+            activityMap = L.map('mapContainer').setView([activity.start_latlng[0], activity.start_latlng[1]], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(activityMap);
+            L.marker([activity.start_latlng[0], activity.start_latlng[1]]).addTo(activityMap).bindPopup('🏁 Início da atividade');
+        } else {
+             console.log("Nenhum dado de mapa (nem polyline, nem start_latlng) encontrado para esta atividade.");
+        }
+    } catch (error) {
+        // Se qualquer erro ocorrer, ele será impresso no console.
+        console.error("ERRO AO EXIBIR O MAPA:", error);
+        // Opcional: mostrar uma mensagem de erro na UI
+        document.getElementById('mapContainer').innerHTML = `<div class="error">Não foi possível carregar o mapa.</div>`;
     }
 }
 
