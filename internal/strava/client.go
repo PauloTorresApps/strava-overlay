@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
 	"net/http"
 	"time"
 
@@ -59,60 +57,33 @@ func NewClient(token *oauth2.Token) *Client {
 }
 
 func (c *Client) GetActivities() ([]Activity, error) {
-	allActivities := make([]Activity, 0)
 	page := 1
-	perPage := 100
+	// CORREÇÃO: Ajustado para 30 itens por página, conforme exigência do Strava.
+	perPage := 30
 
-	log.Println("DEBUG: Iniciando busca de atividades no Strava...")
+	url := fmt.Sprintf("%s/athlete/activities?page=%d&per_page=%d", c.baseURL, page, perPage)
 
-	for {
-		url := fmt.Sprintf("%s/athlete/activities?page=%d&per_page=%d", c.baseURL, page, perPage)
-		log.Printf("DEBUG: Buscando atividades da URL: %s", url)
+	resp, err := c.httpClient.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
 
-		resp, err := c.httpClient.Get(url)
-		if err != nil {
-			log.Printf("ERRO: Falha ao fazer a requisição para o Strava: %v", err)
-			return nil, err
-		}
-		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			log.Printf("ERRO: Falha ao ler o corpo da resposta: %v", err)
-			return nil, err
-		}
-
-		log.Printf("DEBUG: Resposta recebida do Strava (página %d): %s", page, string(body))
-
-		var pageActivities []Activity
-		if err := json.Unmarshal(body, &pageActivities); err != nil {
-			log.Printf("ERRO: Falha ao decodificar o JSON das atividades: %v", err)
-			return nil, err
-		}
-
-		log.Printf("DEBUG: %d atividades decodificadas da página %d.", len(pageActivities), page)
-
-		if len(pageActivities) == 0 {
-			log.Println("DEBUG: Nenhuma atividade retornada na página atual, encerrando busca.")
-			break
-		}
-
-		allActivities = append(allActivities, pageActivities...)
-		page++
+	var pageActivities []Activity
+	if err := json.NewDecoder(resp.Body).Decode(&pageActivities); err != nil {
+		return nil, err
 	}
 
-	log.Printf("DEBUG: Total de atividades brutas encontradas: %d", len(allActivities))
-
 	gpsActivities := make([]Activity, 0)
-	for _, activity := range allActivities {
-		// CORREÇÃO: Apenas verificamos se existe um resumo de mapa (polyline).
-		// Esta é a melhor forma de saber se a atividade tem um trajeto de GPS.
+	for _, activity := range pageActivities {
 		if activity.Map.SummaryPolyline != "" {
 			gpsActivities = append(gpsActivities, activity)
 		}
+		// Para quando encontrarmos as 10 primeiras atividades com GPS
+		if len(gpsActivities) >= 10 {
+			break
+		}
 	}
-
-	log.Printf("DEBUG: Total de atividades com GPS após o filtro: %d", len(gpsActivities))
 
 	return gpsActivities, nil
 }
