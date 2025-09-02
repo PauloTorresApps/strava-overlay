@@ -19,9 +19,8 @@ type Generator struct {
 
 func NewGenerator() *Generator {
 	tempDir, _ := os.MkdirTemp("", "strava_overlays_")
-
 	return &Generator{
-		width:   400, // Quadrado para evitar deformação
+		width:   400,
 		height:  400,
 		tempDir: tempDir,
 	}
@@ -39,309 +38,218 @@ func (g *Generator) GenerateOverlaySequence(points []gps.GPSPoint, frameRate flo
 			maxSpeed = speed
 		}
 	}
-
 	maxSpeedScale := math.Ceil(maxSpeed/10) * 10
 	if maxSpeedScale == 0 {
-		maxSpeedScale = 10
+		maxSpeedScale = 50
 	}
 
 	var imagePaths []string
 	for i, point := range points {
 		imagePath := filepath.Join(g.tempDir, fmt.Sprintf("overlay_%06d.png", i))
-		err := g.generateOptimizedOverlay(point, maxSpeedScale, imagePath)
+		err := g.generateSpeedometerImage(point, maxSpeedScale, imagePath)
 		if err != nil {
 			return nil, fmt.Errorf("erro ao gerar overlay %d: %w", i, err)
 		}
 		imagePaths = append(imagePaths, imagePath)
 	}
-
 	return imagePaths, nil
 }
 
-func (g *Generator) generateOptimizedOverlay(point gps.GPSPoint, maxSpeed float64, outputPath string) error {
+func (g *Generator) generateSpeedometerImage(point gps.GPSPoint, maxSpeed float64, outputPath string) error {
 	dc := gg.NewContext(g.width, g.height)
-
 	dc.SetLineJoin(gg.LineJoinRound)
 	dc.SetLineCap(gg.LineCapRound)
-
-	// Background transparente
 	dc.SetRGBA(0, 0, 0, 0)
 	dc.Clear()
 
-	// Layout reposicionado - sem cortes
 	centerX := float64(g.width) / 2
-	centerY := float64(g.height)/2 - 20 // Ajuste para evitar corte inferior
-	radius := 80.0                      // Reduzido para caber medidores
+	centerY := float64(g.height)/2 - 20
+	radius := 80.0
 	currentSpeed := point.Velocity * 3.6
 
-	// === VELOCÍMETRO CENTRAL ===
-	g.drawNeonSpeedometer(dc, centerX, centerY, radius, currentSpeed, maxSpeed)
-
-	// === BÚSSOLA DESTACADA NO CENTRO ===
-	g.drawIntegratedCompass(dc, centerX, centerY, 35, point.Bearing)
-
-	// === G-FORCE (ESQUERDA SUPERIOR) ===
-	gaugeX := centerX - radius - 50
-	g.drawCompactGauge(dc, gaugeX, centerY-30, 25, math.Abs(point.GForce), 3.0,
-		fmt.Sprintf("%.1fG", math.Abs(point.GForce)), 0.2, 1, 0.3)
-
-	// === ALTÍMETRO (ESQUERDA INFERIOR) ===
-	g.drawCompactGauge(dc, gaugeX, centerY+30, 25, point.Altitude/1000, 5.0,
-		fmt.Sprintf("%.0fm", point.Altitude), 0.3, 0.7, 1)
-
-	// === DISPLAY INTEGRADO NO VELOCÍMETRO ===
-	g.drawIntegratedSpeedDisplay(dc, centerX, centerY+radius*0.6, currentSpeed)
-
-	return dc.SavePNG(outputPath)
-}
-
-// drawNeonSpeedometer - Velocímetro com borda única cinza
-func (g *Generator) drawNeonSpeedometer(dc *gg.Context, x, y, radius, currentSpeed, maxSpeed float64) {
-	// Background escuro
+	// VELOCÍMETRO
 	dc.SetRGBA(0.08, 0.08, 0.08, 0.95)
-	dc.DrawCircle(x, y, radius)
+	dc.DrawCircle(centerX, centerY, radius)
 	dc.Fill()
-
-	// === BORDA ÚNICA CINZA FINA ===
 	dc.SetRGBA(0.6, 0.6, 0.6, 0.8)
 	dc.SetLineWidth(2)
-	dc.DrawCircle(x, y, radius)
+	dc.DrawCircle(centerX, centerY, radius)
 	dc.Stroke()
 
-	// Marcações de velocidade
-	steps := int(maxSpeed / 10)
+	// MARCAÇÕES E NÚMEROS
 	startAngle := 135 * math.Pi / 180
 	totalArc := 270 * math.Pi / 180
-
 	dc.SetFontFace(basicfont.Face7x13)
 
-	for i := 0; i <= steps; i++ {
-		speed := float64(i) * 10
+	for speed := 0.0; speed <= maxSpeed; speed += 1.0 {
 		angle := startAngle + (speed/maxSpeed)*totalArc
 
-		innerRadius := radius - 20
-		outerRadius := radius - 8
+		if int(speed)%5 == 0 {
+			// MARCAÇÃO PRINCIPAL (5 em 5)
+			innerR := radius - 25
+			outerR := radius - 8
+			dc.SetLineWidth(3)
+			dc.SetRGBA(0.9, 0.9, 0.9, 1)
 
-		dc.SetLineWidth(2)
-		dc.SetRGBA(0.7, 0.7, 0.7, 1)
+			x1 := centerX + innerR*math.Cos(angle)
+			y1 := centerY + innerR*math.Sin(angle)
+			x2 := centerX + outerR*math.Cos(angle)
+			y2 := centerY + outerR*math.Sin(angle)
+			dc.DrawLine(x1, y1, x2, y2)
+			dc.Stroke()
 
-		x1 := x + innerRadius*math.Cos(angle)
-		y1 := y + innerRadius*math.Sin(angle)
-		x2 := x + outerRadius*math.Cos(angle)
-		y2 := y + outerRadius*math.Sin(angle)
-		dc.DrawLine(x1, y1, x2, y2)
-		dc.Stroke()
-
-		// Números - fonte simples
-		if speed > 0 && i%2 == 0 {
-			textRadius := radius - 30
-			textX := x + textRadius*math.Cos(angle)
-			textY := y + textRadius*math.Sin(angle)
-
+			// NÚMEROS
+			textR := radius - 35
+			textX := centerX + textR*math.Cos(angle)
+			textY := centerY + textR*math.Sin(angle)
 			dc.SetRGBA(1, 1, 1, 1)
 			dc.DrawStringAnchored(fmt.Sprintf("%.0f", speed), textX, textY, 0.5, 0.5)
+
+		} else {
+			// MARCAÇÃO INTERMEDIÁRIA (1 em 1)
+			innerR := radius - 15
+			outerR := radius - 8
+			dc.SetLineWidth(1)
+			dc.SetRGBA(0.5, 0.5, 0.5, 0.7)
+
+			x1 := centerX + innerR*math.Cos(angle)
+			y1 := centerY + innerR*math.Sin(angle)
+			x2 := centerX + outerR*math.Cos(angle)
+			y2 := centerY + outerR*math.Sin(angle)
+			dc.DrawLine(x1, y1, x2, y2)
+			dc.Stroke()
 		}
 	}
 
-	// === BORDA DE PROGRESSO VERDE NEON ===
+	// ARCO PROGRESSO
 	progressRatio := currentSpeed / maxSpeed
 	if progressRatio > 1 {
 		progressRatio = 1
 	}
 	progressAngle := startAngle + (progressRatio * totalArc)
-
 	dc.SetLineWidth(8)
 	dc.SetRGBA(0.1, 1, 0.1, 0.9)
-	dc.DrawArc(x, y, radius+8, startAngle, progressAngle)
+	dc.DrawArc(centerX, centerY, radius+8, startAngle, progressAngle)
 	dc.Stroke()
+
+	// BÚSSOLA DESTACADA
+	compassRadius := 35.0
+	g.drawCompass(dc, centerX, centerY, compassRadius, point.Bearing)
+
+	// MEDIDORES LATERAIS
+	gaugeX := centerX - radius - 50
+	g.drawGauge(dc, gaugeX, centerY-30, 25, math.Abs(point.GForce), "G")
+	g.drawGauge(dc, gaugeX, centerY+30, 25, point.Altitude/100, "m")
+
+	// DISPLAY SEM FUNDO
+	dc.SetRGBA(0.1, 1, 0.1, 1)
+	speedText := fmt.Sprintf("%.1f", currentSpeed)
+	for dx := -0.5; dx <= 0.5; dx += 0.5 {
+		for dy := -0.5; dy <= 0.5; dy += 0.5 {
+			dc.DrawStringAnchored(speedText, centerX+dx, centerY+radius*0.6+dy, 0.5, 0.5)
+		}
+	}
+	dc.SetRGBA(0.8, 0.8, 0.8, 0.9)
+	dc.DrawStringAnchored("km/h", centerX, centerY+radius*0.6+15, 0.5, 0.5)
+
+	return dc.SavePNG(outputPath)
 }
 
-// drawIntegratedCompass - Bússola destacada com pontos cardeais
-func (g *Generator) drawIntegratedCompass(dc *gg.Context, x, y, radius, bearing float64) {
-	// Background principal da bússola
+func (g *Generator) drawCompass(dc *gg.Context, x, y, radius, bearing float64) {
+	// Background
 	dc.SetRGBA(0.12, 0.12, 0.15, 0.9)
 	dc.DrawCircle(x, y, radius)
 	dc.Fill()
-
-	// Círculo interno mais escuro
-	dc.SetRGBA(0.08, 0.08, 0.1, 0.95)
-	dc.DrawCircle(x, y, radius-4)
-	dc.Fill()
-
-	// Borda externa destacada
 	dc.SetRGBA(0.5, 0.5, 0.6, 0.9)
 	dc.SetLineWidth(2)
 	dc.DrawCircle(x, y, radius)
 	dc.Stroke()
 
-	// === PONTOS CARDEAIS DESTACADOS ===
+	// PONTOS CARDEAIS - REPOSICIONADOS PARA FORA DO VELOCÍMETRO
 	cardinals := []struct {
 		text    string
 		angle   float64
 		r, g, b float64
 	}{
-		{"N", -90, 1, 0.3, 0.3},   // Norte - vermelho
-		{"E", 0, 0.9, 0.9, 0.9},   // Leste - branco
-		{"S", 90, 0.9, 0.9, 0.9},  // Sul - branco
-		{"W", 180, 0.9, 0.9, 0.9}, // Oeste - branco
+		{"N", -90, 1, 0.3, 0.3},
+		{"E", 0, 0.9, 0.9, 0.9},
+		{"S", 90, 0.9, 0.9, 0.9},
+		{"W", 180, 0.9, 0.9, 0.9},
 	}
 
 	dc.SetFontFace(basicfont.Face7x13)
 	for _, card := range cardinals {
 		angleRad := card.angle * math.Pi / 180
-		textX := x + (radius+15)*math.Cos(angleRad)
-		textY := y + (radius+15)*math.Sin(angleRad)
+		// DISTÂNCIA AUMENTADA: 50px além da borda do velocímetro
+		textX := x + (radius+50)*math.Cos(angleRad)
+		textY := y + (radius+50)*math.Sin(angleRad)
 
-		// Background para pontos cardeais
-		dc.SetRGBA(0, 0, 0, 0.6)
-		dc.DrawCircle(textX, textY, 8)
+		// Background para legibilidade
+		dc.SetRGBA(0, 0, 0, 0.7)
+		dc.DrawCircle(textX, textY, 10)
 		dc.Fill()
 
-		// Texto cardinal
 		dc.SetRGBA(card.r, card.g, card.b, 1)
 		dc.DrawStringAnchored(card.text, textX, textY, 0.5, 0.5)
 	}
 
-	// === AGULHA BONITA COM DESIGN ELABORADO ===
+	// AGULHA COM BASE LARGA
 	bearingRad := bearing*math.Pi/180 - math.Pi/2
 	needleLength := radius * 0.85
 
-	// Sombra da agulha
-	tipX := x + needleLength*math.Cos(bearingRad) + 1.5
-	tipY := y + needleLength*math.Sin(bearingRad) + 1.5
-	dc.SetRGBA(0, 0, 0, 0.5)
-	dc.SetLineWidth(4)
-	dc.DrawLine(x, y, tipX, tipY)
-	dc.Stroke()
+	// BASE LARGA
+	baseLength := radius * 0.25
+	baseWidth := 6.0
+	baseEndX := x - baseLength*math.Cos(bearingRad)
+	baseEndY := y - baseLength*math.Sin(bearingRad)
+	baseLeftX := baseEndX + baseWidth*math.Cos(bearingRad+math.Pi/2)
+	baseLeftY := baseEndY + baseWidth*math.Sin(bearingRad+math.Pi/2)
+	baseRightX := baseEndX + baseWidth*math.Cos(bearingRad-math.Pi/2)
+	baseRightY := baseEndY + baseWidth*math.Sin(bearingRad-math.Pi/2)
 
-	// Agulha principal - vermelha brilhante
-	tipX = x + needleLength*math.Cos(bearingRad)
-	tipY = y + needleLength*math.Sin(bearingRad)
-
-	// Corpo da agulha com gradiente simulado
-	dc.SetRGBA(1, 0.1, 0.1, 1)
-	dc.SetLineWidth(3)
-	dc.DrawLine(x, y, tipX, tipY)
-	dc.Stroke()
-
-	// Brilho na agulha
-	dc.SetRGBA(1, 0.4, 0.4, 0.8)
-	dc.SetLineWidth(1)
-	dc.DrawLine(x, y, tipX, tipY)
-	dc.Stroke()
-
-	// Ponta da agulha - triangular
-	pointLength := 8.0
-	pointWidth := 3.0
-
-	// Triângulo da ponta
-	tipFinalX := x + (needleLength+pointLength)*math.Cos(bearingRad)
-	tipFinalY := y + (needleLength+pointLength)*math.Sin(bearingRad)
-
-	leftAngle := bearingRad + math.Pi*0.85
-	rightAngle := bearingRad - math.Pi*0.85
-
-	leftX := tipX + pointWidth*math.Cos(leftAngle)
-	leftY := tipY + pointWidth*math.Sin(leftAngle)
-	rightX := tipX + pointWidth*math.Cos(rightAngle)
-	rightY := tipY + pointWidth*math.Sin(rightAngle)
-
-	dc.SetRGBA(1, 0.2, 0.2, 1)
-	dc.MoveTo(tipFinalX, tipFinalY)
-	dc.LineTo(leftX, leftY)
-	dc.LineTo(rightX, rightY)
+	dc.SetRGBA(0.9, 0.1, 0.1, 1)
+	dc.MoveTo(x, y)
+	dc.LineTo(baseLeftX, baseLeftY)
+	dc.LineTo(baseRightX, baseRightY)
 	dc.ClosePath()
 	dc.Fill()
 
-	// Centro da bússola - design elaborado
+	// CORPO DA AGULHA
+	tipX := x + needleLength*math.Cos(bearingRad)
+	tipY := y + needleLength*math.Sin(bearingRad)
+	dc.SetRGBA(1, 0.1, 0.1, 1)
+	dc.SetLineWidth(5)
+	dc.DrawLine(x, y, tipX, tipY)
+	dc.Stroke()
+
+	// RELEVO CENTRAL
+	dc.SetRGBA(1, 0.7, 0.7, 0.9)
+	dc.SetLineWidth(1)
+	dc.DrawLine(baseEndX, baseEndY, tipX, tipY)
+	dc.Stroke()
+
+	// EIXO RECUADO
+	eixoX := x + (radius*0.08)*math.Cos(bearingRad)
+	eixoY := y + (radius*0.08)*math.Sin(bearingRad)
 	dc.SetRGBA(0.2, 0.2, 0.2, 1)
-	dc.DrawCircle(x, y, 6)
+	dc.DrawCircle(eixoX, eixoY, 4)
 	dc.Fill()
-
-	dc.SetRGBA(1, 0.2, 0.2, 1)
-	dc.DrawCircle(x, y, 4)
-	dc.Fill()
-
-	dc.SetRGBA(1, 0.6, 0.6, 0.8)
-	dc.DrawCircle(x, y, 2)
+	dc.SetRGBA(0.7, 0.7, 0.7, 1)
+	dc.DrawCircle(eixoX, eixoY, 3)
 	dc.Fill()
 }
 
-// drawCompactGauge - Medidores compactos laterais
-func (g *Generator) drawCompactGauge(dc *gg.Context, x, y, radius, value, maxValue float64, label string, r, gVal, b float64) {
-	// Background escuro
+func (g *Generator) drawGauge(dc *gg.Context, x, y, radius, value float64, unit string) {
 	dc.SetRGBA(0.1, 0.1, 0.1, 0.9)
 	dc.DrawCircle(x, y, radius)
 	dc.Fill()
-
-	// Borda colorida
-	dc.SetRGBA(r, gVal, b, 0.8)
-	dc.SetLineWidth(3)
+	dc.SetRGBA(0.5, 0.5, 0.5, 0.8)
+	dc.SetLineWidth(2)
 	dc.DrawCircle(x, y, radius)
 	dc.Stroke()
-
-	// Arco de progresso
-	ratio := math.Min(value/maxValue, 1.0)
-	startAngle := -math.Pi * 0.5
-	endAngle := startAngle + ratio*math.Pi
-
-	dc.SetLineWidth(6)
-	dc.SetRGBA(r, gVal, b, 1)
-	dc.DrawArc(x, y, radius-8, startAngle, endAngle)
-	dc.Stroke()
-
-	// Label central - FONTE SIMPLES
 	dc.SetFontFace(basicfont.Face7x13)
 	dc.SetRGBA(1, 1, 1, 1)
-	dc.DrawStringAnchored(label, x, y, 0.5, 0.5)
-}
-
-// drawMainSpeedDisplay - Display principal com fonte única
-func (g *Generator) drawMainSpeedDisplay(dc *gg.Context, x, y, speed float64) {
-	displayWidth := 100.0
-	displayHeight := 40.0
-
-	// Background preto
-	dc.SetRGBA(0, 0, 0, 0.95)
-	dc.DrawRoundedRectangle(x-displayWidth/2, y-displayHeight/2,
-		displayWidth, displayHeight, 6)
-	dc.Fill()
-
-	// Borda verde neon
-	dc.SetRGBA(0.1, 1, 0.1, 1)
-	dc.SetLineWidth(2)
-	dc.DrawRoundedRectangle(x-displayWidth/2, y-displayHeight/2,
-		displayWidth, displayHeight, 6)
-	dc.Stroke()
-
-	// Velocidade - FONTE ÚNICA, SEM SOBREPOSIÇÃO
-	dc.SetFontFace(basicfont.Face7x13)
-	dc.SetRGBA(0.1, 1, 0.1, 1)
-	dc.DrawStringAnchored(fmt.Sprintf("%.1f", speed), x, y-6, 0.5, 0.5)
-
-	// Unidade
-	dc.SetRGBA(0.8, 0.8, 0.8, 1)
-	dc.DrawStringAnchored("km/h", x, y+12, 0.5, 0.5)
-}
-
-// drawIntegratedSpeedDisplay - Display sem fundo
-func (g *Generator) drawIntegratedSpeedDisplay(dc *gg.Context, x, y, speed float64) {
-	// VELOCIDADE - SEM BACKGROUND
-	dc.SetFontFace(basicfont.Face7x13)
-	dc.SetRGBA(0.1, 1, 0.1, 1)
-
-	speedText := fmt.Sprintf("%.1f", speed)
-
-	// Grid 2x2 controlado
-	for dx := -0.5; dx <= 0.5; dx += 0.5 {
-		for dy := -0.5; dy <= 0.5; dy += 0.5 {
-			dc.DrawStringAnchored(speedText, x+dx, y-4+dy, 0.5, 0.5)
-		}
-	}
-
-	// Unidade
-	dc.SetRGBA(0.8, 0.8, 0.8, 0.9)
-	dc.DrawStringAnchored("km/h", x, y+10, 0.5, 0.5)
+	dc.DrawStringAnchored(fmt.Sprintf("%.1f%s", value, unit), x, y, 0.5, 0.5)
 }
 
 func (g *Generator) Cleanup() {
