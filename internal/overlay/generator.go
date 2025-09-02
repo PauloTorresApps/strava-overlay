@@ -20,8 +20,8 @@ type Generator struct {
 func NewGenerator() *Generator {
 	tempDir, _ := os.MkdirTemp("", "strava_overlays_")
 	return &Generator{
-		width:   200,
-		height:  200,
+		width:   350,
+		height:  350,
 		tempDir: tempDir,
 	}
 }
@@ -31,7 +31,6 @@ func (g *Generator) GenerateOverlaySequence(points []gps.GPSPoint, frameRate flo
 		return nil, fmt.Errorf("no GPS points provided")
 	}
 
-	// Calcula velocidade máxima para escala do velocímetro
 	maxSpeed := 0.0
 	for _, point := range points {
 		speed := point.Velocity * 3.6 // m/s para km/h
@@ -40,10 +39,11 @@ func (g *Generator) GenerateOverlaySequence(points []gps.GPSPoint, frameRate flo
 		}
 	}
 	maxSpeedScale := math.Ceil(maxSpeed/10) * 10
+	if maxSpeedScale == 0 {
+		maxSpeedScale = 10
+	}
 
 	var imagePaths []string
-
-	// Gera uma imagem para cada ponto GPS
 	for i, point := range points {
 		imagePath := filepath.Join(g.tempDir, fmt.Sprintf("overlay_%06d.png", i))
 		err := g.generateSpeedometerImage(point, maxSpeedScale, imagePath)
@@ -54,7 +54,6 @@ func (g *Generator) GenerateOverlaySequence(points []gps.GPSPoint, frameRate flo
 	}
 
 	fmt.Printf("DEBUG: Geradas %d imagens de overlay para %d pontos GPS\n", len(imagePaths), len(points))
-
 	return imagePaths, nil
 }
 
@@ -67,161 +66,139 @@ func (g *Generator) generateSpeedometerImage(point gps.GPSPoint, maxSpeed float6
 
 	centerX := float64(g.width) / 2
 	centerY := float64(g.height) / 2
-	radius := 70.0
+	radius := 85.0
 	currentSpeed := point.Velocity * 3.6
 
 	// === VELOCÍMETRO CIRCULAR ===
-	// Fundo do velocímetro
-	dc.SetRGBA(0.1, 0.1, 0.1, 0.9)
+	dc.SetRGBA(0.1, 0.1, 0.1, 0.85)
 	dc.DrawCircle(centerX, centerY, radius)
 	dc.Fill()
 
-	// Marcações de velocidade (5 em 5 km/h)
-	// Velocidade 0 em 225° (7:30h), crescendo no sentido horário
+	// Marcações de velocidade
 	dc.SetFontFace(basicfont.Face7x13)
 	steps := int(maxSpeed / 5)
-	startAngle := 225 * math.Pi / 180 // 225° em radianos
-	totalArc := 3 * math.Pi / 2       // 270° de arco
+	startAngle := 135 * math.Pi / 180
+	totalArc := 270 * math.Pi / 180
 
 	for i := 0; i <= steps; i++ {
 		speed := float64(i) * 5
 		angle := startAngle + (speed/maxSpeed)*totalArc
 
-		// Linha de marcação
-		x1 := centerX + (radius-15)*math.Cos(angle)
-		y1 := centerY + (radius-15)*math.Sin(angle)
+		x1 := centerX + (radius-12)*math.Cos(angle)
+		y1 := centerY + (radius-12)*math.Sin(angle)
 		x2 := centerX + (radius-5)*math.Cos(angle)
 		y2 := centerY + (radius-5)*math.Sin(angle)
 
-		dc.SetRGBA(0.4, 0.4, 0.4, 1)
-		dc.SetLineWidth(1.5)
+		dc.SetRGBA(0.5, 0.5, 0.5, 1)
+		dc.SetLineWidth(2)
 		dc.DrawLine(x1, y1, x2, y2)
 		dc.Stroke()
 
-		// Números a cada 10 km/h
 		if i%2 == 0 {
-			textX := centerX + (radius-25)*math.Cos(angle)
-			textY := centerY + (radius-25)*math.Sin(angle)
-			dc.SetRGBA(0.8, 0.8, 0.8, 1)
+			textRadius := radius - 26
+			textX := centerX + textRadius*math.Cos(angle)
+			textY := centerY + textRadius*math.Sin(angle)
+			dc.SetRGBA(0.9, 0.9, 0.9, 1)
 			dc.DrawStringAnchored(fmt.Sprintf("%.0f", speed), textX, textY, 0.5, 0.5)
 		}
 	}
 
+	// Borda de progresso
+	progressRatio := currentSpeed / maxSpeed
+	if progressRatio > 1 {
+		progressRatio = 1
+	}
+	progressAngle := startAngle + (progressRatio * totalArc)
+
+	dc.SetLineWidth(6)
+	r := progressRatio * 1.2
+	greenVal := (1 - progressRatio) * 0.5 // Variável 'g' renomeada para 'greenVal'
+	b := (1 - progressRatio)
+	dc.SetRGBA(r, greenVal, b, 1)
+	dc.DrawArc(centerX, centerY, radius+6, startAngle, progressAngle)
+	dc.Stroke()
+
 	// Pontos cardeais
+	dc.SetFontFace(basicfont.Face7x13)
 	cardinals := []struct {
 		text  string
 		angle float64
 	}{
-		{"N", -math.Pi / 2}, {"E", 0}, {"S", math.Pi / 2}, {"W", math.Pi},
+		{"N", -90}, {"E", 0}, {"S", 90}, {"W", 180},
 	}
 	for _, card := range cardinals {
-		x := centerX + (radius+15)*math.Cos(card.angle)
-		y := centerY + (radius+15)*math.Sin(card.angle)
-		dc.SetRGBA(0, 1, 1, 1) // Azul neon
+		angleRad := card.angle * math.Pi / 180
+		x := centerX + (radius+20)*math.Cos(angleRad)
+		y := centerY + (radius+20)*math.Sin(angleRad)
+		dc.SetRGBA(0.8, 0.8, 0.8, 1)
 		dc.DrawStringAnchored(card.text, x, y, 0.5, 0.5)
 	}
 
-	// Borda de progresso (cor baseada na velocidade)
-	progressAngle := (currentSpeed / maxSpeed) * totalArc
-	steps_progress := int(progressAngle * 50 / math.Pi)
+	// === AGULHA DA BÚSSOLA ===
+	compassAngleRad := point.Bearing*math.Pi/180 - math.Pi/2
+	needleLength := radius * 0.5
+	needleWidth := radius * 0.1
 
-	for i := 0; i < steps_progress; i++ {
-		angle := startAngle + float64(i)*progressAngle/float64(steps_progress)
+	tipX := centerX + needleLength*math.Cos(compassAngleRad)
+	tipY := centerY + needleLength*math.Sin(compassAngleRad)
+	baseAngle1 := compassAngleRad + math.Pi*0.9
+	baseAngle2 := compassAngleRad - math.Pi*0.9
+	baseX1 := centerX + needleWidth*math.Cos(baseAngle1)
+	baseY1 := centerY + needleWidth*math.Sin(baseAngle1)
+	baseX2 := centerX + needleWidth*math.Cos(baseAngle2)
+	baseY2 := centerY + needleWidth*math.Sin(baseAngle2)
 
-		// Cor quente/fria baseada na velocidade
-		ratio := currentSpeed / maxSpeed
-		r := ratio
-		g := 1 - ratio
-		b := 0.2
-
-		dc.SetRGBA(r, g, b, 1)
-		dc.SetLineWidth(4)
-
-		x1 := centerX + (radius+2)*math.Cos(angle)
-		y1 := centerY + (radius+2)*math.Sin(angle)
-		x2 := centerX + (radius+8)*math.Cos(angle)
-		y2 := centerY + (radius+8)*math.Sin(angle)
-		dc.DrawLine(x1, y1, x2, y2)
-		dc.Stroke()
-	}
-
-	// Borda externa
-	dc.SetRGBA(0.3, 0.3, 0.3, 1)
-	dc.SetLineWidth(2)
-	dc.DrawCircle(centerX, centerY, radius)
-	dc.Stroke()
-
-	// === AGULHA DA BÚSSOLA (TRIANGULAR VERMELHA) ===
-	compassAngle := point.Bearing*math.Pi/180 - math.Pi/2
-	needleLength := 25.0
-	needleWidth := 8.0
-
-	// Ponta da agulha
-	tipX := centerX + needleLength*math.Cos(compassAngle)
-	tipY := centerY + needleLength*math.Sin(compassAngle)
-
-	// Base da agulha (lados do triângulo)
-	leftX := centerX + needleWidth*math.Cos(compassAngle+math.Pi/2)
-	leftY := centerY + needleWidth*math.Sin(compassAngle+math.Pi/2)
-	rightX := centerX + needleWidth*math.Cos(compassAngle-math.Pi/2)
-	rightY := centerY + needleWidth*math.Sin(compassAngle-math.Pi/2)
-
-	// Desenha triângulo vermelho neon
-	dc.SetRGBA(1, 0.1, 0.1, 1) // Vermelho neon
+	dc.SetRGBA(1, 0, 0, 0.9)
 	dc.MoveTo(tipX, tipY)
-	dc.LineTo(leftX, leftY)
-	dc.LineTo(rightX, rightY)
+	dc.LineTo(baseX1, baseY1)
+	dc.LineTo(baseX2, baseY2)
 	dc.ClosePath()
 	dc.Fill()
 
 	// Centro da bússola
-	dc.SetRGBA(1, 0.1, 0.1, 1)
-	dc.DrawCircle(centerX, centerY, 4)
+	dc.SetRGBA(0.1, 0.1, 0.1, 1)
+	dc.DrawCircle(centerX, centerY, 6)
+	dc.Fill()
+	dc.SetRGBA(1, 0, 0, 0.9)
+	dc.DrawCircle(centerX, centerY, 3)
 	dc.Fill()
 
 	// === DISPLAY DIGITAL DE VELOCIDADE ===
-	dc.SetRGBA(0, 0, 0, 0.9)
-	dc.DrawRoundedRectangle(centerX-25, centerY+35, 50, 20, 5)
-	dc.Fill()
-
-	dc.SetRGBA(0, 1, 0, 1) // Verde neon
-	dc.SetLineWidth(1)
-	dc.DrawRoundedRectangle(centerX-25, centerY+35, 50, 20, 5)
-	dc.Stroke()
-
+	digitalY := centerY + radius*0.5
+	dc.SetFontFace(basicfont.Face7x13)
 	dc.SetRGBA(0, 1, 0, 1)
-	dc.DrawStringAnchored(fmt.Sprintf("%.0f km/h", currentSpeed), centerX, centerY+45, 0.5, 0.5)
+	dc.DrawStringAnchored(fmt.Sprintf("%.1f", currentSpeed), centerX, digitalY, 0.5, 0.5)
+	dc.SetFontFace(basicfont.Face7x13)
+	dc.DrawStringAnchored("km/h", centerX, digitalY+12, 0.5, 0.5)
 
-	// === G-FORCE (superior esquerdo) ===
-	gX := centerX - radius - 30
-	gY := centerY - radius + 20
+	// === G-FORCE ===
+	gForceRadius := 25.0
+	gX := centerX - radius - gForceRadius - 4
+	gY := centerY - radius*0.6
 
-	dc.SetRGBA(0.1, 0.1, 0.1, 0.9)
-	dc.DrawCircle(gX, gY, 18)
+	dc.SetRGBA(0.1, 0.1, 0.1, 0.85)
+	dc.DrawCircle(gX, gY, gForceRadius)
 	dc.Fill()
-
-	dc.SetRGBA(1, 1, 0, 1) // Amarelo neon
+	dc.SetRGBA(0, 1, 0, 1)
 	dc.SetLineWidth(2)
-	dc.DrawCircle(gX, gY, 18)
+	dc.DrawCircle(gX, gY, gForceRadius)
 	dc.Stroke()
+	dc.SetRGBA(0.9, 0.9, 0.9, 1)
+	dc.DrawStringAnchored(fmt.Sprintf("%.1fG", math.Abs(point.GForce)), gX, gY, 0.5, 0.5)
 
-	dc.SetRGBA(1, 1, 0, 1)
-	dc.DrawStringAnchored(fmt.Sprintf("%.1f G", math.Abs(point.GForce)), gX, gY, 0.5, 0.5)
+	// === ALTÍMETRO ===
+	altRadius := 25.0
+	altX := centerX - radius - altRadius - 4
+	altY := centerY + radius*0.6
 
-	// === ALTÍMETRO (inferior esquerdo) ===
-	altX := centerX - radius - 30
-	altY := centerY + radius - 20
-
-	dc.SetRGBA(0.1, 0.1, 0.1, 0.9)
-	dc.DrawRoundedRectangle(altX-25, altY-12, 50, 24, 5)
+	dc.SetRGBA(0.1, 0.1, 0.1, 0.85)
+	dc.DrawCircle(altX, altY, altRadius)
 	dc.Fill()
-
-	dc.SetRGBA(0, 1, 1, 1) // Azul ciano neon
-	dc.SetLineWidth(2)
-	dc.DrawRoundedRectangle(altX-25, altY-12, 50, 24, 5)
-	dc.Stroke()
-
 	dc.SetRGBA(0, 1, 1, 1)
+	dc.SetLineWidth(2)
+	dc.DrawCircle(altX, altY, altRadius)
+	dc.Stroke()
+	dc.SetRGBA(0.9, 0.9, 0.9, 1)
 	dc.DrawStringAnchored(fmt.Sprintf("%.0fm", point.Altitude), altX, altY, 0.5, 0.5)
 
 	return dc.SavePNG(outputPath)

@@ -31,19 +31,17 @@ func (gp *GPSProcessor) ProcessStreamData(timeData, latlngData, velocityData, al
 	}
 
 	log.Printf("DEBUG: Processando %d pontos GPS", len(timeData))
-	gp.points = make([]GPSPoint, 0, len(timeData))
+	rawPoints := make([]GPSPoint, 0, len(timeData))
 
 	validPoints := 0
 	for i := 0; i < len(timeData); i++ {
 		timeOffset, ok := timeData[i].(float64)
 		if !ok {
-			log.Printf("DEBUG: Ignorando ponto %d - timeOffset inválido", i)
 			continue
 		}
 
 		latlngInterface, ok := latlngData[i].([]interface{})
 		if !ok || len(latlngInterface) != 2 {
-			log.Printf("DEBUG: Ignorando ponto %d - latlng inválido", i)
 			continue
 		}
 
@@ -53,7 +51,6 @@ func (gp *GPSProcessor) ProcessStreamData(timeData, latlngData, velocityData, al
 		if !ok1 || !ok2 || lat == 0 && lng == 0 ||
 			lat < -90 || lat > 90 || lng < -180 || lng > 180 ||
 			math.IsNaN(lat) || math.IsNaN(lng) {
-			log.Printf("DEBUG: Ignorando ponto %d - coordenadas inválidas: lat=%.6f, lng=%.6f", i, lat, lng)
 			continue
 		}
 
@@ -75,13 +72,13 @@ func (gp *GPSProcessor) ProcessStreamData(timeData, latlngData, velocityData, al
 			}
 		}
 
-		if len(gp.points) > 0 {
-			prevPoint := gp.points[len(gp.points)-1]
+		if len(rawPoints) > 0 {
+			prevPoint := rawPoints[len(rawPoints)-1]
 			point.Bearing = gp.calculateBearing(prevPoint, point)
 			point.GForce = gp.calculateGForce(prevPoint, point)
 		}
 
-		gp.points = append(gp.points, point)
+		rawPoints = append(rawPoints, point)
 		validPoints++
 	}
 
@@ -89,42 +86,86 @@ func (gp *GPSProcessor) ProcessStreamData(timeData, latlngData, velocityData, al
 		return fmt.Errorf("nenhum ponto GPS válido encontrado")
 	}
 
-	log.Printf("DEBUG: %d pontos GPS válidos processados de %d totais", validPoints, len(timeData))
+	// Interpola os pontos para criar uma transição suave
+	gp.points = gp.interpolatePoints(rawPoints)
+	log.Printf("DEBUG: %d pontos GPS válidos processados, resultando em %d pontos após interpolação", validPoints, len(gp.points))
+
 	return nil
+}
+
+func (gp *GPSProcessor) interpolatePoints(points []GPSPoint) []GPSPoint {
+	if len(points) < 2 {
+		return points
+	}
+
+	var interpolated []GPSPoint
+	for i := 0; i < len(points)-1; i++ {
+		p1 := points[i]
+		p2 := points[i+1]
+
+		t1 := p1.Time
+		t2 := p2.Time
+		duration := t2.Sub(t1)
+
+		// Adiciona o ponto inicial do intervalo
+		interpolated = append(interpolated, p1)
+
+		// Se o intervalo for maior que 1 segundo, interpola
+		if duration.Seconds() > 1.0 {
+			// Gera os pontos intermediários a cada segundo
+			for t := time.Second; t < duration; t += time.Second {
+				ratio := float64(t) / float64(duration)
+
+				lat := p1.Lat + ratio*(p2.Lat-p1.Lat)
+				lng := p1.Lng + ratio*(p2.Lng-p1.Lng)
+				altitude := p1.Altitude + ratio*(p2.Altitude-p1.Altitude)
+				velocity := p1.Velocity + ratio*(p2.Velocity-p1.Velocity)
+
+				// Para Bearing e GForce, usamos o valor do ponto anterior para simplicidade
+				bearing := p1.Bearing
+				gForce := p1.GForce
+
+				newPoint := GPSPoint{
+					Time:     t1.Add(t),
+					Lat:      lat,
+					Lng:      lng,
+					Altitude: altitude,
+					Velocity: velocity,
+					Bearing:  bearing,
+					GForce:   gForce,
+				}
+				interpolated = append(interpolated, newPoint)
+			}
+		}
+	}
+
+	// Adiciona o último ponto
+	interpolated = append(interpolated, points[len(points)-1])
+	return interpolated
 }
 
 func (gp *GPSProcessor) GetPointsForTimeRange(startTime, endTime time.Time) []GPSPoint {
 	var result []GPSPoint
 
-	startPoint, startFound := gp.GetPointForTime(startTime)
-	if !startFound {
-		return result
-	}
+	startIdx := -1
+	endIdx := -1
 
-	endPoint, endFound := gp.GetPointForTime(endTime)
-	if !endFound {
-		return result
-	}
-
-	collecting := false
-	for _, point := range gp.points {
-		if point.Time.Equal(startPoint.Time) {
-			collecting = true
+	// Encontra os índices de início e fim baseados no tempo
+	for i, point := range gp.points {
+		if startIdx == -1 && (point.Time.Equal(startTime) || point.Time.After(startTime)) {
+			startIdx = i
 		}
-
-		if collecting {
-			result = append(result, point)
-		}
-
-		if point.Time.Equal(endPoint.Time) {
-			break
+		if endIdx == -1 && (point.Time.Equal(endTime) || point.Time.After(endTime)) {
+			endIdx = i
+			break // para a busca após encontrar o ponto final
 		}
 	}
 
-	fmt.Printf("DEBUG: Vídeo inicia em %s, termina em %s\n", startTime.Format("15:04:05"), endTime.Format("15:04:05"))
-	fmt.Printf("DEBUG: GPS inicia em %s, termina em %s\n", startPoint.Time.Format("15:04:05"), endPoint.Time.Format("15:04:05"))
-	fmt.Printf("DEBUG: Coletados %d pontos GPS para o vídeo\n", len(result))
+	if startIdx != -1 && endIdx != -1 {
+		result = gp.points[startIdx : endIdx+1]
+	}
 
+	fmt.Printf("DEBUG: Coletados %d pontos GPS para o vídeo (de %s a %s)\n", len(result), startTime.Format("15:04:05"), endTime.Format("15:04:05"))
 	return result
 }
 
@@ -158,47 +199,27 @@ func (gp *GPSProcessor) calculateGForce(from, to GPSPoint) float64 {
 
 func (gp *GPSProcessor) GetPointForTime(targetTime time.Time) (GPSPoint, bool) {
 	if len(gp.points) == 0 {
-		log.Printf("DEBUG: Nenhum ponto GPS disponível")
 		return GPSPoint{}, false
 	}
 
 	var closestPoint GPSPoint
-	var minDiff time.Duration
+	minDiff := time.Duration(math.MaxInt64)
 	found := false
 
-	log.Printf("DEBUG: Buscando ponto GPS para %s entre %d pontos",
-		targetTime.Format("15:04:05"), len(gp.points))
-
-	for i, point := range gp.points {
-		if point.Lat == 0 && point.Lng == 0 {
-			continue
-		}
-		if point.Lat < -90 || point.Lat > 90 || point.Lng < -180 || point.Lng > 180 {
-			continue
-		}
-
+	for _, point := range gp.points {
 		diff := point.Time.Sub(targetTime)
 		if diff < 0 {
 			diff = -diff
 		}
-
-		if !found || diff < minDiff || (diff == minDiff && point.Time.After(closestPoint.Time)) {
-			closestPoint = point
+		if diff < minDiff {
 			minDiff = diff
+			closestPoint = point
 			found = true
-		}
-
-		if i < 3 || i >= len(gp.points)-3 {
-			log.Printf("DEBUG: Ponto %d: %s - Lat: %.6f, Lng: %.6f",
-				i, point.Time.Format("15:04:05"), point.Lat, point.Lng)
 		}
 	}
 
 	if found {
-		log.Printf("DEBUG: Ponto GPS encontrado: %s (diferença: %v) - Lat: %.6f, Lng: %.6f",
-			closestPoint.Time.Format("15:04:05"), minDiff, closestPoint.Lat, closestPoint.Lng)
-	} else {
-		log.Printf("DEBUG: Nenhum ponto GPS válido encontrado")
+		log.Printf("DEBUG: Ponto GPS mais próximo encontrado: %s (diferença: %v)", closestPoint.Time.Format("15:04:05"), minDiff)
 	}
 
 	return closestPoint, found
