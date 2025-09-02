@@ -1,2 +1,2 @@
 .env
-./build/bin
+build/bin/
