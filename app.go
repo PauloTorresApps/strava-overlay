@@ -226,8 +226,52 @@ func (a *App) GetGPSPointForVideoTime(activityID int64, videoPath string) (Front
 	}, nil
 }
 
-// Substitua também esta função em app.go
-func (a *App) ProcessVideoOverlay(activityID int64, videoPath string) (string, error) {
+// GetGPSPointForMapClick encontra o ponto GPS mais próximo de um clique no mapa.
+func (a *App) GetGPSPointForMapClick(activityID int64, lat, lng float64) (FrontendGPSPoint, error) {
+	if a.stravaClient == nil {
+		return FrontendGPSPoint{}, fmt.Errorf("not authenticated")
+	}
+
+	detail, err := a.stravaClient.GetActivityDetail(activityID)
+	if err != nil {
+		return FrontendGPSPoint{}, fmt.Errorf("failed to get activity detail: %w", err)
+	}
+	streams, err := a.stravaClient.GetActivityStreams(activityID)
+	if err != nil {
+		return FrontendGPSPoint{}, fmt.Errorf("failed to get activity streams: %w", err)
+	}
+
+	// Re-processa os streams para garantir que o processador esteja populado
+	processor := gps.NewGPSProcessor()
+	err = processor.ProcessStreamData(
+		streams["time"].Data.([]interface{}),
+		streams["latlng"].Data.([]interface{}),
+		streams["velocity_smooth"].Data.([]interface{}),
+		streams["altitude"].Data.([]interface{}),
+		detail.StartDate,
+	)
+	if err != nil {
+		return FrontendGPSPoint{}, fmt.Errorf("failed to process GPS data for map click: %w", err)
+	}
+
+	point, found := processor.GetPointForCoords(lat, lng)
+	if !found {
+		return FrontendGPSPoint{}, fmt.Errorf("no matching GPS point found for coordinates")
+	}
+
+	return FrontendGPSPoint{
+		Time:     point.Time.Format(time.RFC3339),
+		Lat:      point.Lat,
+		Lng:      point.Lng,
+		Velocity: point.Velocity,
+		Altitude: point.Altitude,
+		Bearing:  point.Bearing,
+		GForce:   point.GForce,
+	}, nil
+}
+
+// ProcessVideoOverlay aplica o overlay ao vídeo, usando um tempo de início manual ou automático.
+func (a *App) ProcessVideoOverlay(activityID int64, videoPath string, manualStartTimeStr string) (string, error) {
 	if a.stravaClient == nil {
 		return "", fmt.Errorf("not authenticated")
 	}
@@ -240,21 +284,35 @@ func (a *App) ProcessVideoOverlay(activityID int64, videoPath string) (string, e
 		return "", fmt.Errorf("failed to get activity detail: %w", err)
 	}
 
-	// --- LÓGICA DE CORREÇÃO DE FUSO HORÁRIO ---
-	videoTimeUTC := videoMeta.CreationTime
-	tzParts := strings.Split(detail.Timezone, " ")
-	ianaTZ := tzParts[len(tzParts)-1]
-	location, err := time.LoadLocation(ianaTZ)
-	if err != nil {
-		log.Printf("Aviso: fuso horário desconhecido '%s', usando UTC como padrão. Erro: %v", ianaTZ, err)
-		location = time.UTC
+	// --- LÓGICA DE SINCRONIZAÇÃO DE TEMPO ---
+	var correctedVideoStartTime time.Time
+
+	if manualStartTimeStr != "" {
+		// Usa o tempo manual se fornecido
+		parsedTime, err := time.Parse(time.RFC3339, manualStartTimeStr)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse manual start time: %w", err)
+		}
+		correctedVideoStartTime = parsedTime
+		fmt.Printf("DEBUG: Usando tempo de início manual: %s\n", correctedVideoStartTime.Format("15:04:05"))
+	} else {
+		// Lógica de fallback (automática)
+		videoTimeUTC := videoMeta.CreationTime
+		tzParts := strings.Split(detail.Timezone, " ")
+		ianaTZ := tzParts[len(tzParts)-1]
+		location, err := time.LoadLocation(ianaTZ)
+		if err != nil {
+			log.Printf("Aviso: fuso horário desconhecido '%s', usando UTC como padrão. Erro: %v", ianaTZ, err)
+			location = time.UTC
+		}
+		correctedVideoStartTime = time.Date(
+			videoTimeUTC.Year(), videoTimeUTC.Month(), videoTimeUTC.Day(),
+			videoTimeUTC.Hour(), videoTimeUTC.Minute(), videoTimeUTC.Second(), videoTimeUTC.Nanosecond(),
+			location,
+		)
+		fmt.Printf("DEBUG: Usando tempo de início automático: %s\n", correctedVideoStartTime.Format("15:04:05"))
 	}
-	correctedVideoStartTime := time.Date(
-		videoTimeUTC.Year(), videoTimeUTC.Month(), videoTimeUTC.Day(),
-		videoTimeUTC.Hour(), videoTimeUTC.Minute(), videoTimeUTC.Second(), videoTimeUTC.Nanosecond(),
-		location,
-	)
-	// --- FIM DA LÓGICA DE CORREÇÃO ---
+	// --- FIM DA LÓGICA DE SINCRONIZAÇÃO ---
 
 	streams, err := a.stravaClient.GetActivityStreams(activityID)
 	if err != nil {

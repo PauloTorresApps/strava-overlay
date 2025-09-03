@@ -9,8 +9,10 @@ export function GetActivities():Promise<Array<main.FrontendActivity>>;
 
 export function GetActivityDetail(arg1:number):Promise<strava.ActivityDetail>;
 
+export function GetGPSPointForMapClick(arg1:number,arg2:number,arg3:number):Promise<main.FrontendGPSPoint>;
+
 export function GetGPSPointForVideoTime(arg1:number,arg2:string):Promise<main.FrontendGPSPoint>;
 
-export function ProcessVideoOverlay(arg1:number,arg2:string):Promise<string>;
+export function ProcessVideoOverlay(arg1:number,arg2:string,arg3:string):Promise<string>;
 
 export function SelectVideoFile():Promise<string>;

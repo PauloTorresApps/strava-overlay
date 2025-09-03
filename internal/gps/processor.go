@@ -224,3 +224,48 @@ func (gp *GPSProcessor) GetPointForTime(targetTime time.Time) (GPSPoint, bool) {
 
 	return closestPoint, found
 }
+
+// haversineDistance calcula a distância entre dois pontos GPS.
+func haversineDistance(p1, p2 GPSPoint) float64 {
+	const R = 6371 // Raio da Terra em km
+	lat1Rad := p1.Lat * math.Pi / 180
+	lon1Rad := p1.Lng * math.Pi / 180
+	lat2Rad := p2.Lat * math.Pi / 180
+	lon2Rad := p2.Lng * math.Pi / 180
+
+	dLat := lat2Rad - lat1Rad
+	dLon := lon2Rad - lon1Rad
+
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) + math.Cos(lat1Rad)*math.Cos(lat2Rad)*math.Sin(dLon/2)*math.Sin(dLon/2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+
+	return R * c
+}
+
+// GetPointForCoords encontra o ponto GPS mais próximo de uma coordenada específica.
+func (gp *GPSProcessor) GetPointForCoords(targetLat, targetLng float64) (GPSPoint, bool) {
+	if len(gp.points) == 0 {
+		return GPSPoint{}, false
+	}
+
+	var closestPoint GPSPoint
+	minDist := math.MaxFloat64
+	found := false
+
+	targetPoint := GPSPoint{Lat: targetLat, Lng: targetLng}
+
+	for _, point := range gp.points {
+		dist := haversineDistance(targetPoint, point)
+		if dist < minDist {
+			minDist = dist
+			closestPoint = point
+			found = true
+		}
+	}
+
+	if found {
+		log.Printf("DEBUG: Ponto GPS mais próximo do clique encontrado: %s (distância: %.2f m)", closestPoint.Time.Format("15:04:05"), minDist*1000)
+	}
+
+	return closestPoint, found
+}

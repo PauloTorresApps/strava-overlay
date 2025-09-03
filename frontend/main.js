@@ -5,6 +5,8 @@ let videoStartMarker = null;
 let selectedVideoPath = "";
 let tileCache = new Map(); // Cache de tiles
 let mapBounds = null; // Cache dos bounds da atividade
+let manualSyncTime = ""; // Armazena o tempo de início selecionado manualmente
+let activityPolyline = null; // Referência à linha do trajeto no mapa
 
 // DOM elements
 const authBtn = document.getElementById('authBtn');
@@ -47,24 +49,6 @@ function preloadMapResources() {
         const img = new Image();
         img.crossOrigin = 'anonymous';
         img.src = url;
-    });
-}
-
-// Tile layer otimizado com cache
-function createOptimizedTileLayer() {
-    return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19,
-        tileSize: 256,
-        crossOrigin: true,
-        // Cache por 1 hora
-        cacheTimeout: 3600000,
-        // Carrega tiles extras para suavizar navegação
-        keepBuffer: 4,
-        // Otimizações de performance
-        updateWhenIdle: false,
-        updateWhenZooming: false,
-        reuseTiles: true
     });
 }
 
@@ -194,41 +178,35 @@ function displayMap(activity) {
     console.log("Inicializando mapa para a atividade:", activity.name);
     
     try {
-        // Remove mapa anterior se existir
         if (activityMap) {
             activityMap.remove();
             activityMap = null;
         }
-        
-        // Remove marcador do vídeo anterior
-        if (videoStartMarker) {
-            videoStartMarker = null;
-        }
+        if (videoStartMarker) videoStartMarker = null;
+        if (activityPolyline) activityPolyline = null;
+        manualSyncTime = ""; // Reseta a sincronização manual
         
         if (activity.map && activity.map.summary_polyline) {
-            // Inicializa o mapa
             activityMap = L.map('mapContainer');
             
-            // Adiciona camada de tiles
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors'
             }).addTo(activityMap);
             
-            // Decodifica e adiciona a rota
             const latlngs = L.Polyline.fromEncoded(activity.map.summary_polyline).getLatLngs();
-            const polyline = L.polyline(latlngs, { color: '#f85149', weight: 3 }).addTo(activityMap);
+            activityPolyline = L.polyline(latlngs, { color: '#f85149', weight: 3 }).addTo(activityMap);
             
-            // Ajusta visualização para mostrar toda a rota
-            activityMap.fitBounds(polyline.getBounds());
+            // Adiciona o listener de clique para a sincronização manual
+            activityPolyline.on('click', handleMapClick);
             
-            // Adiciona marcadores de início e fim
+            activityMap.fitBounds(activityPolyline.getBounds());
+            
             L.marker(latlngs[0]).addTo(activityMap).bindPopup('🏁 Início');
             L.marker(latlngs[latlngs.length - 1]).addTo(activityMap).bindPopup('🏆 Fim');
             
             console.log("Mapa inicializado com sucesso");
             
         } else if (activity.start_latlng && activity.start_latlng.length === 2) {
-            // Fallback para atividades sem polyline
             activityMap = L.map('mapContainer').setView([activity.start_latlng[0], activity.start_latlng[1]], 13);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
                 attribution: '© OpenStreetMap contributors' 
@@ -236,7 +214,6 @@ function displayMap(activity) {
             L.marker([activity.start_latlng[0], activity.start_latlng[1]]).addTo(activityMap)
                 .bindPopup('🏁 Início da atividade');
         } else {
-            console.log("Nenhum dado de mapa disponível para esta atividade.");
             document.getElementById('mapContainer').innerHTML = `<div class="error">Mapa não disponível para esta atividade.</div>`;
             return;
         }
@@ -247,99 +224,94 @@ function displayMap(activity) {
     }
 }
 
+// Função para lidar com o clique no mapa para sincronização manual
+async function handleMapClick(e) {
+    if (!selectedActivity) return;
+
+    try {
+        console.log(`Clique no mapa detectado em: ${e.latlng.lat}, ${e.latlng.lng}`);
+        showMessage(result, 'Ajustando ponto de sincronização...', 'info');
+
+        const point = await window.go.main.App.GetGPSPointForMapClick(selectedActivity.id, e.latlng.lat, e.latlng.lng);
+        
+        if (point && point.lat && point.lng) {
+            console.log(`Ponto de sincronização manual definido para: ${point.time}`);
+            manualSyncTime = point.time; // Armazena o tempo manual
+            updateVideoStartMarker(point.lat, point.lng, '▶️ Início Manual do Vídeo');
+            showMessage(result, `Ponto de sincronização manual definido.`, 'success');
+        } else {
+            showMessage(result, `Não foi possível encontrar um ponto GPS próximo ao clique.`, 'error');
+        }
+
+    } catch (error) {
+        console.error("Erro ao definir ponto de sincronização manual:", error);
+        showMessage(result, `Erro ao ajustar sincronização: ${error}`, 'error');
+    }
+}
+
+// Função auxiliar para criar/atualizar o marcador de início do vídeo
+function updateVideoStartMarker(lat, lng, popupText) {
+     if (!activityMap) {
+        console.error("Mapa não está inicializado para atualizar o marcador");
+        return;
+    }
+
+    if (videoStartMarker) {
+        videoStartMarker.remove();
+        videoStartMarker = null;
+    }
+
+    const blueIcon = new L.Icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+        iconSize: [25, 41], 
+        iconAnchor: [12, 41], 
+        popupAnchor: [1, -34], 
+        shadowSize: [41, 41]
+    });
+
+    videoStartMarker = L.marker([lat, lng], { icon: blueIcon })
+        .addTo(activityMap)
+        .bindPopup(popupText)
+        .openPopup();
+
+    setTimeout(() => {
+        try {
+            activityMap.invalidateSize();
+            activityMap.panTo([lat, lng]);
+            console.log("Mapa centralizado no novo marcador de início.");
+        } catch (error) {
+            console.error("Erro ao centralizar mapa no marcador:", error);
+        }
+    }, 200);
+}
+
 async function selectVideo() {
     try {
         const path = await window.go.main.App.SelectVideoFile();
-        if (!path) {
-            return;
-        }
+        if (!path) return;
 
         selectedVideoPath = path;
+        manualSyncTime = ""; // Reseta ao selecionar um novo vídeo
 
         const fileName = path.split(/[\\/]/).pop();
         videoInfo.innerHTML = `
             <h4>Vídeo Selecionado</h4>
             <p><strong>Arquivo:</strong> ${fileName}</p>
-            <p><strong>Caminho:</strong> ${path}</p>
         `;
         processBtn.disabled = false;
 
-        // Busca o ponto GPS correspondente ao início do vídeo
-        console.log("Buscando ponto GPS para sincronização...");
+        console.log("Buscando ponto GPS para sincronização automática...");
         const point = await window.go.main.App.GetGPSPointForVideoTime(selectedActivity.id, path);
         
         if (point && point.lat && point.lng) {
-            console.log(`Ponto GPS encontrado: ${point.lat}, ${point.lng}`);
-            
-            // Remove marcador anterior se existir
-            if (videoStartMarker) {
-                videoStartMarker.remove();
-                videoStartMarker = null;
-            }
-
-            // Verifica se o mapa existe
-            if (!activityMap) {
-                console.error("Mapa não está inicializado");
-                return;
-            }
-
-            // Cria ícone azul para o início do vídeo
-            const blueIcon = new L.Icon({
-                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-                iconSize: [25, 41], 
-                iconAnchor: [12, 41], 
-                popupAnchor: [1, -34], 
-                shadowSize: [41, 41]
-            });
-
-            // Adiciona marcador do início do vídeo
-            videoStartMarker = L.marker([point.lat, point.lng], { icon: blueIcon })
-                .addTo(activityMap)
-                .bindPopup('▶️ Início do Vídeo')
-                .openPopup();
-
-            console.log("Marcador adicionado, ajustando visualização...");
-
-            // Aguarda um momento e então ajusta a visualização
-            setTimeout(() => {
-                try {
-                    // Force o mapa a recalcular seu tamanho
-                    activityMap.invalidateSize();
-                    
-                    // Centraliza no ponto do vídeo com zoom alto
-                    activityMap.setView([point.lat, point.lng], 16);
-                    
-                    console.log("Mapa centralizado no ponto do vídeo");
-                } catch (error) {
-                    console.error("Erro ao centralizar mapa:", error);
-                }
-            }, 200);
-
+            updateVideoStartMarker(point.lat, point.lng, '▶️ Início Automático (Clique no trajeto para ajustar)');
         } else {
-            console.warn("Nenhum ponto GPS encontrado para o horário do vídeo");
-            showMessage(result, 'Não foi possível encontrar dados GPS para o horário do vídeo', 'error');
+            showMessage(result, 'Não foi possível encontrar dados GPS para o horário do vídeo. Clique no mapa para definir o início.', 'error');
         }
-
     } catch (error) {
-        console.error("Erro ao selecionar o vídeo:", error);
         showMessage(result, `Erro ao selecionar vídeo: ${error}`, 'error');
     }
-}
-
-// Função para aguardar o mapa estar pronto
-function waitForMapReady() {
-    return new Promise((resolve) => {
-        if (!activityMap) {
-            resolve(false);
-            return;
-        }
-        
-        // Aguarda o mapa estar completamente carregado
-        activityMap.whenReady(() => {
-            setTimeout(resolve, 100); // Buffer adicional
-        });
-    });
 }
 
 async function processVideo() {
@@ -353,7 +325,10 @@ async function processVideo() {
         progress.classList.remove('hidden');
         result.innerHTML = '';
         simulateProgress();
-        const outputPath = await window.go.main.App.ProcessVideoOverlay(selectedActivity.id, selectedVideoPath);
+
+        // Passa o tempo manual (pode ser uma string vazia) para o backend
+        const outputPath = await window.go.main.App.ProcessVideoOverlay(selectedActivity.id, selectedVideoPath, manualSyncTime);
+        
         updateProgress(100);
         showMessage(result, `Vídeo processado com sucesso!<br><strong>Local:</strong> ${outputPath}`, 'success');
     } catch (error) {
