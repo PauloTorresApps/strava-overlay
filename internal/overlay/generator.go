@@ -128,8 +128,8 @@ func (g *Generator) generateSpeedometerImage(point gps.GPSPoint, maxSpeed float6
 	}
 	progressAngle := startAngle + (progressRatio * totalArc)
 	dc.SetLineWidth(8)
-	dc.SetRGBA(0.1, 1, 0.1, 0.9)
-	dc.DrawArc(centerX, centerY, radius, startAngle, progressAngle) // Removido +8
+	dc.SetRGBA(0.1, 1, 0.1, 0.1)
+	dc.DrawArc(centerX, centerY, radius, startAngle, progressAngle)
 	dc.Stroke()
 
 	// BÚSSOLA DESTACADA
@@ -137,9 +137,9 @@ func (g *Generator) generateSpeedometerImage(point gps.GPSPoint, maxSpeed float6
 	g.drawCompass(dc, centerX, centerY, compassRadius, point.Bearing)
 
 	// MEDIDORES LATERAIS
-	gaugeX := centerX - radius - 50
-	g.drawGauge(dc, gaugeX, centerY-30, 25, math.Abs(point.GForce), "G")
-	g.drawGauge(dc, gaugeX, centerY+30, 25, point.Altitude/100, "m")
+	gaugeX := centerX - radius - 23
+	g.drawGauge(dc, gaugeX, centerY-45, 25, math.Abs(point.GForce), "G")
+	g.drawGauge(dc, gaugeX, centerY+45, 25, point.Altitude/100, "m")
 
 	// DISPLAY SEM FUNDO
 	dc.SetRGBA(0.1, 1, 0.1, 1)
@@ -157,7 +157,7 @@ func (g *Generator) generateSpeedometerImage(point gps.GPSPoint, maxSpeed float6
 
 func (g *Generator) drawCompass(dc *gg.Context, x, y, radius, bearing float64) {
 	// Background
-	dc.SetRGBA(0.12, 0.12, 0.15, 0.9)
+	dc.SetRGBA(0.12, 0.12, 0.15, 0.5)
 	dc.DrawCircle(x, y, radius)
 	dc.Fill()
 	dc.SetRGBA(0.5, 0.5, 0.6, 0.9)
@@ -181,8 +181,8 @@ func (g *Generator) drawCompass(dc *gg.Context, x, y, radius, bearing float64) {
 	for _, card := range cardinals {
 		angleRad := card.angle * math.Pi / 180
 		// DISTÂNCIA FINAL: 62px da borda
-		textX := x + (radius+62)*math.Cos(angleRad)
-		textY := y + (radius+62)*math.Sin(angleRad)
+		textX := x + (radius+60)*math.Cos(angleRad)
+		textY := y + (radius+60)*math.Sin(angleRad)
 
 		// FONTE DEFINIDA SEM FUNDO
 		dc.SetRGBA(card.r, card.g, card.b, 1)
