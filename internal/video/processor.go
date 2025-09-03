@@ -43,13 +43,14 @@ func (p *Processor) ApplyOverlays(inputVideo string, overlayImages []string, out
 		"-safe", "0",
 		"-i", listFile,
 		"-filter_complex",
-		// **CORREÇÃO**: Garante que o formato de píxeis com transparência (rgba) seja mantido
-		// e que os timestamps sejam reiniciados para o stream de overlay.
-		"[1:v]format=rgba,setpts=PTS-STARTPTS[ovr];[0:v][ovr]overlay=30:main_h-overlay_h-30",
+		// --- MODIFICAÇÃO: Margens do overlay reduzidas para 10 pixels ---
+		"[1:v]format=rgba,setpts=PTS-STARTPTS[ovr];[0:v][ovr]overlay=5:main_h-overlay_h-5",
+		// -----------------------------------------------------------------
+		"-map_metadata", "0", // Copia os metadados do stream 0 (vídeo original)
 		"-c:a", "copy", // Copia o stream de áudio sem re-codificar
 		"-c:v", "libx264", // Codec de vídeo
 		"-preset", "fast", // Preset de velocidade de codificação
-		"-crf", "22", // Fator de Qualidade Constante (menor é melhor)
+		"-crf", "18", // Fator de Qualidade Constante (menor é melhor)
 		"-y", // Sobrescreve o arquivo de saída se ele existir
 		outputPath,
 	)
