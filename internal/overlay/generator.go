@@ -128,7 +128,7 @@ func (g *Generator) generateSpeedometerImage(point gps.GPSPoint, maxSpeed float6
 	}
 	progressAngle := startAngle + (progressRatio * totalArc)
 	dc.SetLineWidth(8)
-	dc.SetRGBA(0.1, 1, 0.1, 0.1)
+	dc.SetRGBA(0.1, 1, 0.1, 0.5)
 	dc.DrawArc(centerX, centerY, radius, startAngle, progressAngle)
 	dc.Stroke()
 
