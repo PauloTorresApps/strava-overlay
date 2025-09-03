@@ -7,6 +7,8 @@ let tileCache = new Map(); // Cache de tiles
 let mapBounds = null; // Cache dos bounds da atividade
 let manualSyncTime = ""; // Armazena o tempo de início selecionado manualmente
 let activityPolyline = null; // Referência à linha do trajeto no mapa
+let currentMarkerDensity = 'medium';
+let currentGPSMarkersGroup = null;
 
 // DOM elements
 const authBtn = document.getElementById('authBtn');
@@ -174,8 +176,11 @@ function displayActivityDetail(detail) {
     `;
 }
 
-// ========================================
 // 2. SUBSTITUIR NO frontend/main.js
+// ========================================
+
+// ========================================
+// SUBSTITUIR NO frontend/main.js
 // ========================================
 
 async function displayMap(activity) {
@@ -189,49 +194,624 @@ async function displayMap(activity) {
         if (videoStartMarker) videoStartMarker = null;
         if (activityPolyline) activityPolyline = null;
         manualSyncTime = ""; // Reseta a sincronização manual
+
+        // Inicializa mapa básico primeiro
+        activityMap = L.map('mapContainer');
         
-        if (activity.map && activity.map.summary_polyline) {
-            activityMap = L.map('mapContainer');
-            
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(activityMap);
-            
-            const latlngs = L.Polyline.fromEncoded(activity.map.summary_polyline).getLatLngs();
-            activityPolyline = L.polyline(latlngs, { color: '#f85149', weight: 3 }).addTo(activityMap);
-            
-            activityPolyline.on('click', handleMapClick);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(activityMap);
 
-            // Fit bounds primeiro
-            activityMap.fitBounds(activityPolyline.getBounds());
-            
-            // Adiciona marcadores de início e fim
-            L.marker(latlngs[0]).addTo(activityMap).bindPopup('🏁 Início');
-            L.marker(latlngs[latlngs.length - 1]).addTo(activityMap).bindPopup('🏆 Fim');
-            
-            console.log("Mapa inicializado com sucesso");
+        console.log("Mapa inicializado, carregando dados GPS...");
 
-            // AGORA adiciona os pontos GPS depois que o mapa está pronto
-            setTimeout(async () => {
-                await addGPSMarkersToMap(activity.id);
-            }, 500); // Pequeno delay para garantir que o mapa está renderizado
-            
-        } else if (activity.start_latlng && activity.start_latlng.length === 2) {
-            activityMap = L.map('mapContainer').setView([activity.start_latlng[0], activity.start_latlng[1]], 13);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
-                attribution: '© OpenStreetMap contributors' 
-            }).addTo(activityMap);
-            L.marker([activity.start_latlng[0], activity.start_latlng[1]]).addTo(activityMap)
-                .bindPopup('🏁 Início da atividade');
-        } else {
-            document.getElementById('mapContainer').innerHTML = `<div class="error">Mapa não disponível para esta atividade.</div>`;
-            return;
-        }
+        // NOVA ABORDAGEM: Carrega dados GPS interpolados primeiro
+        await loadInterpolatedTrajectory(activity);
         
     } catch (error) {
         console.error("ERRO AO EXIBIR O MAPA:", error);
         document.getElementById('mapContainer').innerHTML = `<div class="error">Erro ao carregar o mapa: ${error.message}</div>`;
     }
+}
+
+async function loadInterpolatedTrajectory(activity) {
+    try {
+        showMessage(result, 'Carregando trajeto detalhado...', 'info');
+
+        // 1. CARREGA TRAJETO COMPLETO
+        console.log("Carregando trajeto completo...");
+        const fullTrajectory = await window.go.main.App.GetFullGPSTrajectory(activity.id);
+        
+        if (!fullTrajectory || fullTrajectory.length === 0) {
+            console.log("Sem dados de trajeto completo, usando trajeto simplificado");
+            loadFallbackTrajectory(activity);
+            return;
+        }
+
+        console.log(`✅ Trajeto completo: ${fullTrajectory.length} pontos interpolados`);
+
+        // 2. CRIA TRAJETO PRINCIPAL
+        await createSpeedGradientTrajectory(fullTrajectory);
+
+        // 3. CARREGA MARCADORES COM DENSIDADE PADRÃO
+        const markerCount = await loadGPSMarkersWithDensity(activity.id, 'medium');
+
+        // 4. MARCADORES DE INÍCIO E FIM
+        const startPoint = fullTrajectory[0];
+        const endPoint = fullTrajectory[fullTrajectory.length - 1];
+        
+        L.marker([startPoint.lat, startPoint.lng], {
+            icon: createCustomIcon('🏁', '#28a745')
+        }).addTo(activityMap).bindPopup(`
+            <strong>🏁 INÍCIO</strong><br>
+            ⏰ ${new Date(startPoint.time).toLocaleTimeString('pt-BR')}<br>
+            🏃 ${(startPoint.velocity * 3.6).toFixed(1)} km/h
+        `);
+        
+        L.marker([endPoint.lat, endPoint.lng], {
+            icon: createCustomIcon('🏆', '#dc3545')  
+        }).addTo(activityMap).bindPopup(`
+            <strong>🏆 FIM</strong><br>
+            ⏰ ${new Date(endPoint.time).toLocaleTimeString('pt-BR')}<br>
+            🏃 ${(endPoint.velocity * 3.6).toFixed(1)} km/h
+        `);
+
+        // 5. FIT BOUNDS
+        const bounds = L.latLngBounds(fullTrajectory.map(p => [p.lat, p.lng]));
+        activityMap.fitBounds(bounds, { padding: [20, 20] });
+
+        // 6. CONTROLES APRIMORADOS
+        addAdvancedTrajectoryControls(activity.id);
+
+        showMessage(result, `✅ Trajeto: ${fullTrajectory.length} pontos | Marcadores: ${markerCount}`, 'success');
+        setTimeout(() => showMessage(result, '', ''), 4000);
+
+    } catch (error) {
+        console.error("Erro ao carregar trajeto:", error);
+        showMessage(result, `Erro: ${error}`, 'error');
+        loadFallbackTrajectory(activity);
+    }
+}
+
+// NOVA FUNÇÃO: Controles avançados com densidade de marcadores
+function addAdvancedTrajectoryControls(activityId) {
+    // Controle de densidade dos marcadores
+    const densityControl = L.control({ position: 'topright' });
+    
+    densityControl.onAdd = function() {
+        const div = L.DomUtil.create('div', 'density-control');
+        div.innerHTML = `
+            <div style="
+                background: rgba(22, 27, 34, 0.95);
+                border: 1px solid #30363d;
+                border-radius: 8px;
+                padding: 10px;
+                margin-bottom: 10px;
+                min-width: 180px;
+            ">
+                <div style="font-weight: bold; margin-bottom: 8px; color: #c9d1d9; font-size: 13px;">
+                    📍 Densidade de Marcadores
+                </div>
+                <select id="density-selector" style="
+                    width: 100%;
+                    padding: 6px;
+                    border: 1px solid #30363d;
+                    border-radius: 4px;
+                    background: #161b22;
+                    color: #c9d1d9;
+                    font-size: 12px;
+                ">
+                    <option value="low">📊 Baixa (60s)</option>
+                    <option value="medium" selected>📊 Média (30s + eventos)</option>
+                    <option value="high">📊 Alta (15s)</option>
+                    <option value="ultra_high">📊 Ultra (5s)</option>
+                </select>
+                <div style="
+                    font-size: 10px; 
+                    color: #8b949e; 
+                    margin-top: 4px;
+                    text-align: center;
+                ">
+                    Atual: <span id="current-density">Média</span>
+                </div>
+            </div>
+        `;
+        
+        // Previne propagação de eventos do mapa
+        L.DomEvent.disableClickPropagation(div);
+        
+        return div;
+    };
+    
+    densityControl.addTo(activityMap);
+    
+    // Handler para mudança de densidade
+    setTimeout(() => {
+        const selector = document.getElementById('density-selector');
+        const currentLabel = document.getElementById('current-density');
+        
+        if (selector) {
+            selector.addEventListener('change', async (e) => {
+                const newDensity = e.target.value;
+                console.log(`🔄 Alterando densidade para: ${newDensity}`);
+                
+                showMessage(result, `🔄 Carregando marcadores (${getDensityLabel(newDensity)})...`, 'info');
+                
+                const count = await loadGPSMarkersWithDensity(activityId, newDensity);
+                currentLabel.textContent = getDensityLabel(newDensity);
+                
+                console.log(`✅ Densidade alterada: ${count} marcadores`);
+            });
+        }
+    }, 100);
+    
+    // Legenda de velocidade (mantém a existente)
+    addTrajectoryControls();
+}
+
+async function createSpeedGradientTrajectory(fullTrajectoryPoints) {
+    console.log(`🎨 Criando trajeto colorido com ${fullTrajectoryPoints.length} pontos...`);
+    
+    // ======================================
+    // OPÇÃO 1: Trajeto simples mas completo (RECOMENDADO)
+    // ======================================
+    
+    // Cria um trajeto único com todos os pontos, colorido pela velocidade média
+    const allLatLngs = fullTrajectoryPoints.map(p => [p.lat, p.lng]);
+    const avgSpeed = fullTrajectoryPoints.reduce((sum, p) => sum + (p.velocity * 3.6), 0) / fullTrajectoryPoints.length;
+    
+    activityPolyline = L.polyline(allLatLngs, {
+        color: getSpeedColor(avgSpeed),
+        weight: 4,
+        opacity: 0.8,
+        smoothFactor: 1.0
+    }).addTo(activityMap);
+
+    // Handler de clique para sincronização (mais eficiente)
+    activityPolyline.on('click', (e) => handleTrajectoryClickOptimized(e, fullTrajectoryPoints));
+
+    activityPolyline.bindPopup(`
+        <div style="font-size: 12px;">
+            <strong>📊 Trajeto Completo</strong><br>
+            🏃 Velocidade média: ${avgSpeed.toFixed(1)} km/h<br>
+            📏 ${fullTrajectoryPoints.length} pontos GPS<br>
+            ⏱️ ${new Date(fullTrajectoryPoints[0].time).toLocaleTimeString('pt-BR')} - 
+                 ${new Date(fullTrajectoryPoints[fullTrajectoryPoints.length-1].time).toLocaleTimeString('pt-BR')}
+        </div>
+    `);
+
+    console.log(`✅ Trajeto principal criado (${allLatLngs.length} coordenadas)`);
+
+    // ======================================
+    // OPÇÃO 2: Múltiplos segmentos coloridos (DESCOMENTE SE PREFERIR)
+    // ======================================
+    /*
+    // Para atividades muito longas, pode ser melhor agrupar em segmentos
+    if (fullTrajectoryPoints.length > 2000) {
+        console.log("Trajeto muito longo, criando segmentos coloridos...");
+        const speedSegments = groupPointsBySpeed(fullTrajectoryPoints, 8); // threshold menor
+        
+        speedSegments.forEach((segment, index) => {
+            const latlngs = segment.points.map(p => [p.lat, p.lng]);
+            const avgSpeed = segment.avgSpeed;
+            
+            const polyline = L.polyline(latlngs, {
+                color: getSpeedColor(avgSpeed),
+                weight: getSpeedWeight(avgSpeed),
+                opacity: 0.8,
+                smoothFactor: 0.5 // Menos suavização para manter precisão
+            }).addTo(activityMap);
+
+            polyline.on('click', (e) => handleTrajectoryClick(e, segment.points));
+        });
+    }
+    */
+}
+
+// FUNÇÃO AUXILIAR: Agrupa pontos por velocidade similar
+function groupPointsBySpeed(points, speedThreshold = 5) {
+    const segments = [];
+    let currentSegment = { points: [points[0]], speeds: [points[0].velocity * 3.6] };
+    
+    for (let i = 1; i < points.length; i++) {
+        const currentSpeed = points[i].velocity * 3.6;
+        const avgSegmentSpeed = currentSegment.speeds.reduce((a, b) => a + b, 0) / currentSegment.speeds.length;
+        
+        // Se a velocidade mudou significativamente, inicia novo segmento
+        if (Math.abs(currentSpeed - avgSegmentSpeed) > speedThreshold && currentSegment.points.length > 5) {
+            currentSegment.avgSpeed = avgSegmentSpeed;
+            segments.push(currentSegment);
+            currentSegment = { points: [points[i]], speeds: [currentSpeed] };
+        } else {
+            currentSegment.points.push(points[i]);
+            currentSegment.speeds.push(currentSpeed);
+        }
+    }
+    
+    // Adiciona o último segmento
+    if (currentSegment.points.length > 0) {
+        currentSegment.avgSpeed = currentSegment.speeds.reduce((a, b) => a + b, 0) / currentSegment.speeds.length;
+        segments.push(currentSegment);
+    }
+    
+    console.log(`Trajeto dividido em ${segments.length} segmentos por velocidade`);
+    return segments;
+}
+
+// FUNÇÃO AUXILIAR: Cor baseada na velocidade
+function getSpeedColor(speedKmh) {
+    if (speedKmh > 40) return '#dc3545'; // Vermelho - muito rápido
+    if (speedKmh > 25) return '#fd7e14'; // Laranja - rápido  
+    if (speedKmh > 15) return '#ffc107'; // Amarelo - moderado
+    if (speedKmh > 8) return '#28a745';  // Verde - lento
+    return '#6c757d'; // Cinza - muito lento/parado
+}
+
+// FUNÇÃO AUXILIAR: Espessura baseada na velocidade
+function getSpeedWeight(speedKmh) {
+    if (speedKmh > 30) return 5;
+    if (speedKmh > 15) return 4;  
+    if (speedKmh > 5) return 3;
+    return 2;
+}
+
+// FUNÇÃO AUXILIAR: Handler de clique no trajeto
+async function handleTrajectoryClick(e, segmentPoints) {
+    // Encontra o ponto mais próximo do clique dentro do segmento
+    const clickLatLng = e.latlng;
+    let closestPoint = null;
+    let minDistance = Infinity;
+    
+    segmentPoints.forEach(point => {
+        const distance = clickLatLng.distanceTo([point.lat, point.lng]);
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestPoint = point;
+        }
+    });
+    
+    if (closestPoint) {
+        console.log(`Clique no trajeto - ponto selecionado: ${closestPoint.time}`);
+        manualSyncTime = closestPoint.time;
+        updateVideoStartMarker(closestPoint.lat, closestPoint.lng, '▶️ Início Manual do Vídeo');
+        showMessage(result, `Sincronização ajustada para ${new Date(closestPoint.time).toLocaleTimeString('pt-BR')}`, 'success');
+    }
+}
+
+// NOVA FUNÇÃO: Handler de clique otimizado para trajeto completo
+async function handleTrajectoryClickOptimized(e, fullTrajectoryPoints) {
+    console.log("🖱️ Clique no trajeto detectado, buscando ponto mais próximo...");
+    
+    const clickLatLng = e.latlng;
+    let closestPoint = null;
+    let minDistance = Infinity;
+    
+    // Busca binária otimizada ou busca linear (dependendo do tamanho)
+    if (fullTrajectoryPoints.length > 1000) {
+        // Para trajetos grandes, faz amostragem primeiro
+        const sampleStep = Math.ceil(fullTrajectoryPoints.length / 200);
+        const sampledPoints = fullTrajectoryPoints.filter((_, index) => index % sampleStep === 0);
+        
+        // Encontra região aproximada
+        sampledPoints.forEach(point => {
+            const distance = clickLatLng.distanceTo([point.lat, point.lng]);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestPoint = point;
+            }
+        });
+        
+        // Refina busca na região próxima
+        const closestIndex = fullTrajectoryPoints.findIndex(p => p.time === closestPoint.time);
+        const searchRange = Math.min(100, Math.floor(fullTrajectoryPoints.length / 20));
+        const startIdx = Math.max(0, closestIndex - searchRange);
+        const endIdx = Math.min(fullTrajectoryPoints.length - 1, closestIndex + searchRange);
+        
+        minDistance = Infinity;
+        for (let i = startIdx; i <= endIdx; i++) {
+            const point = fullTrajectoryPoints[i];
+            const distance = clickLatLng.distanceTo([point.lat, point.lng]);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestPoint = point;
+            }
+        }
+    } else {
+        // Para trajetos menores, busca linear simples
+        fullTrajectoryPoints.forEach(point => {
+            const distance = clickLatLng.distanceTo([point.lat, point.lng]);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestPoint = point;
+            }
+        });
+    }
+    
+    if (closestPoint) {
+        console.log(`✅ Ponto mais próximo: ${closestPoint.time} (${minDistance.toFixed(2)}m de distância)`);
+        manualSyncTime = closestPoint.time;
+        updateVideoStartMarker(closestPoint.lat, closestPoint.lng, '▶️ Início Manual do Vídeo');
+        
+        const timeStr = new Date(closestPoint.time).toLocaleTimeString('pt-BR');
+        const speedStr = (closestPoint.velocity * 3.6).toFixed(1);
+        showMessage(result, `🎯 Sincronização: ${timeStr} (${speedStr} km/h)`, 'success');
+    }
+}
+
+// Função para marcadores agora usa dados já filtrados
+function addSelectiveGPSMarkers(filteredGPSPoints) {
+    console.log(`📍 Adicionando ${filteredGPSPoints.length} marcadores seletivos...`);
+    
+    const gpsMarkersGroup = L.layerGroup();
+    
+    filteredGPSPoints.forEach((point, index) => {
+        const speed = point.velocity * 3.6;
+        const color = getSpeedColor(speed);
+        
+        const marker = L.circleMarker([point.lat, point.lng], {
+            radius: 4, // Aumentei um pouco para ficar mais visível
+            fillColor: color,
+            fillOpacity: 0.8,
+            color: '#ffffff',
+            weight: 1.5,
+            opacity: 1
+        });
+        
+        // Popup com informações do ponto
+        const time = new Date(point.time).toLocaleTimeString('pt-BR');
+        marker.bindPopup(`
+            <div style="font-size: 12px;">
+                <strong>📍 Ponto ${index + 1}</strong><br>
+                <strong>⏰ ${time}</strong><br>
+                🏃 Velocidade: ${speed.toFixed(1)} km/h<br>
+                ⛰️ Altitude: ${point.altitude.toFixed(0)}m<br>
+                🧭 Direção: ${point.bearing.toFixed(0)}°<br>
+                📍 ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}
+            </div>
+        `);
+
+        // Tooltip que aparece no hover (sem precisar clicar)
+        marker.bindTooltip(`${time} • ${speed.toFixed(1)} km/h`, {
+            permanent: false,
+            direction: 'top',
+            offset: [0, -10]
+        });
+        
+        gpsMarkersGroup.addLayer(marker);
+    });
+    
+    // CORREÇÃO PRINCIPAL: Adiciona os marcadores ANTES de criar o controle
+    gpsMarkersGroup.addTo(activityMap);
+    
+    // Controle de camadas - agora os marcadores estão HABILITADOS por padrão
+    const overlayMaps = {
+        "📍 Pontos GPS": gpsMarkersGroup
+    };
+    
+    const layerControl = L.control.layers(null, overlayMaps, { 
+        position: 'topright',
+        collapsed: false 
+    }).addTo(activityMap);
+    
+    console.log(`✅ ${filteredGPSPoints.length} marcadores GPS adicionados e VISÍVEIS`);
+    
+    // Adiciona informação visual sobre os marcadores
+    setTimeout(() => {
+        showMessage(result, `📍 ${filteredGPSPoints.length} marcadores GPS visíveis no mapa`, 'info');
+        setTimeout(() => showMessage(result, '', ''), 2000);
+    }, 1000);
+}
+
+// NOVA FUNÇÃO: Cria marcadores com diferentes tipos baseados na velocidade
+function addEnhancedGPSMarkers(filteredGPSPoints) {
+    console.log(`📍 Adicionando marcadores aprimorados...`);
+    
+    // Grupo para diferentes tipos de marcadores
+    const speedMarkersGroup = L.layerGroup();
+    const keyPointsGroup = L.layerGroup();
+    
+    filteredGPSPoints.forEach((point, index) => {
+        const speed = point.velocity * 3.6;
+        const color = getSpeedColor(speed);
+        const time = new Date(point.time);
+        
+        // Determina o tipo de marcador
+        let markerType = 'normal';
+        let radius = 4;
+        let weight = 1.5;
+        
+        // Marcadores especiais para pontos interessantes
+        if (speed > 35) {
+            markerType = 'fast';
+            radius = 6;
+            weight = 2;
+        } else if (speed < 3) {
+            markerType = 'stop';
+            radius = 5;
+            weight = 2;
+        } else if (index === 0 || index === filteredGPSPoints.length - 1) {
+            markerType = 'endpoint';
+            radius = 7;
+            weight = 2.5;
+        }
+        
+        const marker = L.circleMarker([point.lat, point.lng], {
+            radius: radius,
+            fillColor: color,
+            fillOpacity: markerType === 'normal' ? 0.7 : 0.9,
+            color: markerType === 'endpoint' ? '#000000' : '#ffffff',
+            weight: weight,
+            opacity: 1
+        });
+        
+        // Popup detalhado
+        const timeStr = time.toLocaleTimeString('pt-BR');
+        marker.bindPopup(`
+            <div style="font-size: 12px;">
+                <strong>📍 ${getMarkerTypeLabel(markerType)} ${index + 1}</strong><br>
+                <strong>⏰ ${timeStr}</strong><br>
+                🏃 ${speed.toFixed(1)} km/h<br>
+                ⛰️ ${point.altitude.toFixed(0)}m<br>
+                🧭 ${point.bearing.toFixed(0)}°<br>
+                <small>📍 ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}</small>
+                <hr style="margin: 5px 0;">
+                <small><em>Clique no trajeto próximo para sincronizar vídeo</em></small>
+            </div>
+        `);
+        
+        // Tooltip mais informativo
+        marker.bindTooltip(`${timeStr} • ${speed.toFixed(1)} km/h • ${point.altitude.toFixed(0)}m`, {
+            permanent: false,
+            direction: 'top',
+            offset: [0, -10],
+            className: 'custom-tooltip'
+        });
+        
+        // Adiciona ao grupo apropriado
+        if (markerType === 'endpoint' || markerType === 'fast' || markerType === 'stop') {
+            keyPointsGroup.addLayer(marker);
+        } else {
+            speedMarkersGroup.addLayer(marker);
+        }
+    });
+    
+    // Adiciona ambos os grupos ao mapa
+    speedMarkersGroup.addTo(activityMap);
+    keyPointsGroup.addTo(activityMap);
+    
+    // Controle de camadas com opções separadas
+    const overlayMaps = {
+        "📍 Pontos GPS": speedMarkersGroup,
+        "⭐ Pontos-Chave": keyPointsGroup
+    };
+    
+    L.control.layers(null, overlayMaps, { 
+        position: 'topright',
+        collapsed: false 
+    }).addTo(activityMap);
+    
+    console.log(`✅ Marcadores GPS criados: ${speedMarkersGroup.getLayers().length} normais + ${keyPointsGroup.getLayers().length} especiais`);
+    
+    // Feedback para o usuário
+    const totalMarkers = speedMarkersGroup.getLayers().length + keyPointsGroup.getLayers().length;
+    setTimeout(() => {
+        showMessage(result, `📍 ${totalMarkers} marcadores GPS carregados (${keyPointsGroup.getLayers().length} pontos-chave)`, 'success');
+        setTimeout(() => showMessage(result, '', ''), 3000);
+    }, 1000);
+}
+
+// FUNÇÃO AUXILIAR: Labels para tipos de marcadores
+function getMarkerTypeLabel(type) {
+    switch(type) {
+        case 'fast': return '🚀 Alta Velocidade';
+        case 'stop': return '🛑 Parada';
+        case 'endpoint': return '📍 Marco';
+        default: return '📍 Ponto GPS';
+    }
+}
+
+
+
+
+// FUNÇÃO AUXILIAR: Seleciona pontos-chave para marcadores
+function selectKeyPoints(points, intervalSeconds = 30) {
+    const keyPoints = [];
+    let lastTime = null;
+    let lastSpeed = null;
+    
+    points.forEach(point => {
+        const currentTime = new Date(point.time);
+        const currentSpeed = point.velocity * 3.6;
+        
+        // Critérios para ponto-chave:
+        // 1. Primeiro ponto
+        // 2. Intervalo de tempo (ex: 30s)  
+        // 3. Mudança significativa de velocidade (>10 km/h)
+        const shouldInclude = !lastTime || 
+                             (currentTime - lastTime) >= (intervalSeconds * 1000) ||
+                             (lastSpeed && Math.abs(currentSpeed - lastSpeed) > 10);
+        
+        if (shouldInclude) {
+            keyPoints.push(point);
+            lastTime = currentTime;
+            lastSpeed = currentSpeed;
+        }
+    });
+    
+    return keyPoints;
+}
+
+// FUNÇÃO: Fallback para trajeto simplificado (caso dados GPS falhem)
+function loadFallbackTrajectory(activity) {
+    console.log("Carregando trajeto simplificado (fallback)");
+    
+    if (activity.map && activity.map.summary_polyline) {
+        const latlngs = L.Polyline.fromEncoded(activity.map.summary_polyline).getLatLngs();
+        activityPolyline = L.polyline(latlngs, { color: '#f85149', weight: 3 }).addTo(activityMap);
+        
+        activityPolyline.on('click', handleMapClick);
+        activityMap.fitBounds(activityPolyline.getBounds());
+        
+        L.marker(latlngs[0]).addTo(activityMap).bindPopup('🏁 Início');
+        L.marker(latlngs[latlngs.length - 1]).addTo(activityMap).bindPopup('🏆 Fim');
+        
+        showMessage(result, 'Trajeto básico carregado (dados GPS limitados)', 'info');
+    }
+}
+
+// FUNÇÃO AUXILIAR: Cria ícones customizados
+function createCustomIcon(emoji, color) {
+    return L.divIcon({
+        html: `<div style="
+            background-color: ${color}; 
+            border-radius: 50%; 
+            width: 30px; 
+            height: 30px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 14px;
+            border: 2px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        ">${emoji}</div>`,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+    });
+}
+
+// NOVA FUNÇÃO: Adiciona controles de visualização
+function addTrajectoryControls() {
+    // Legenda de velocidade
+    const legend = L.control({ position: 'bottomleft' });
+    
+    legend.onAdd = function() {
+        const div = L.DomUtil.create('div', 'speed-legend');
+        div.innerHTML = `
+            <div style="font-weight: bold; margin-bottom: 5px;">🏃 Velocidade</div>
+            <div class="speed-legend-item">
+                <div class="speed-legend-color" style="background: #dc3545;"></div>
+                > 40 km/h
+            </div>
+            <div class="speed-legend-item">
+                <div class="speed-legend-color" style="background: #fd7e14;"></div>
+                25-40 km/h  
+            </div>
+            <div class="speed-legend-item">
+                <div class="speed-legend-color" style="background: #ffc107;"></div>
+                15-25 km/h
+            </div>
+            <div class="speed-legend-item">
+                <div class="speed-legend-color" style="background: #28a745;"></div>
+                8-15 km/h
+            </div>
+            <div class="speed-legend-item">
+                <div class="speed-legend-color" style="background: #6c757d;"></div>
+                < 8 km/h
+            </div>
+        `;
+        return div;
+    };
+    
+    legend.addTo(activityMap);
 }
 
 // NOVA FUNÇÃO para adicionar marcadores GPS
@@ -501,3 +1081,127 @@ function translateActivityType(type) {
     return translations[type] || type;
 }
 
+async function loadGPSMarkersWithDensity(activityId, density = 'medium') {
+    try {
+        console.log(`📍 Carregando marcadores GPS (densidade: ${density})...`);
+        
+        // Remove marcadores existentes
+        if (currentGPSMarkersGroup && activityMap.hasLayer(currentGPSMarkersGroup)) {
+            activityMap.removeLayer(currentGPSMarkersGroup);
+        }
+        
+        // Carrega pontos com a densidade especificada
+        let gpsMarkers;
+        if (window.go.main.App.GetGPSPointsWithDensity) {
+            // Se o método com densidade estiver disponível
+            gpsMarkers = await window.go.main.App.GetGPSPointsWithDensity(activityId, density);
+        } else {
+            // Fallback para método padrão
+            gpsMarkers = await window.go.main.App.GetAllGPSPoints(activityId);
+        }
+
+        if (!gpsMarkers || gpsMarkers.length === 0) {
+            console.log("Nenhum marcador GPS encontrado");
+            return;
+        }
+
+        console.log(`✅ ${gpsMarkers.length} marcadores carregados (densidade: ${density})`);
+
+        // Cria grupo de marcadores
+        currentGPSMarkersGroup = L.layerGroup();
+        
+        // Adiciona cada marcador
+        gpsMarkers.forEach((point, index) => {
+            const speed = point.velocity * 3.6;
+            const color = getSpeedColor(speed);
+            const time = new Date(point.time);
+            
+            // Tamanho baseado na densidade
+            let radius = getDensityRadius(density);
+            
+            const marker = L.circleMarker([point.lat, point.lng], {
+                radius: radius,
+                fillColor: color,
+                fillOpacity: 0.8,
+                color: '#ffffff',
+                weight: 1.5,
+                opacity: 1
+            });
+            
+            // Popup com informações detalhadas
+            const timeStr = time.toLocaleTimeString('pt-BR');
+            marker.bindPopup(`
+                <div style="font-size: 12px;">
+                    <strong>📍 Ponto GPS ${index + 1}</strong><br>
+                    <strong>⏰ ${timeStr}</strong><br>
+                    🏃 Velocidade: ${speed.toFixed(1)} km/h<br>
+                    ⛰️ Altitude: ${point.altitude.toFixed(0)}m<br>
+                    🧭 Direção: ${point.bearing.toFixed(0)}°<br>
+                    📍 ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}<br>
+                    <hr style="margin: 8px 0;">
+                    <small><em>💡 Clique próximo no trajeto para sincronizar</em></small>
+                </div>
+            `);
+
+            // Tooltip no hover
+            marker.bindTooltip(`${timeStr} • ${speed.toFixed(1)} km/h`, {
+                permanent: false,
+                direction: 'top',
+                offset: [0, -8],
+                className: 'custom-tooltip'
+            });
+            
+            currentGPSMarkersGroup.addLayer(marker);
+        });
+        
+        // Adiciona ao mapa
+        currentGPSMarkersGroup.addTo(activityMap);
+        
+        // Atualiza densidade atual
+        currentMarkerDensity = density;
+        
+        // Feedback para usuário
+        const densityLabel = getDensityLabel(density);
+        showMessage(result, `📍 ${gpsMarkers.length} marcadores GPS (${densityLabel})`, 'success');
+        setTimeout(() => showMessage(result, '', ''), 3000);
+        
+        return gpsMarkers.length;
+
+    } catch (error) {
+        console.error("Erro ao carregar marcadores GPS:", error);
+        showMessage(result, `Erro ao carregar marcadores: ${error}`, 'error');
+        return 0;
+    }
+}
+
+// FUNÇÃO AUXILIAR: Tamanho do marcador baseado na densidade
+function getDensityRadius(density) {
+    switch(density) {
+        case 'ultra_high': return 3;
+        case 'high': return 4;
+        case 'medium': return 4;
+        case 'low': return 5;
+        default: return 4;
+    }
+}
+
+// FUNÇÃO AUXILIAR: Label da densidade
+function getDensityLabel(density) {
+    switch(density) {
+        case 'ultra_high': return 'Ultra Alta';
+        case 'high': return 'Alta';
+        case 'medium': return 'Média';
+        case 'low': return 'Baixa';
+        default: return 'Média';
+    }
+}
+
+// FUNÇÃO AUXILIAR: Remove controles antigos
+function clearTrajectoryControls() {
+    // Remove controles existentes se houver
+    activityMap.eachLayer((layer) => {
+        if (layer instanceof L.Control) {
+            activityMap.removeControl(layer);
+        }
+    });
+}

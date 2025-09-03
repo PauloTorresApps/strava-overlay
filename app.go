@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -352,8 +353,157 @@ func (a *App) ProcessVideoOverlay(activityID int64, videoPath string, manualStar
 	return outputPath, nil
 }
 
-// GetAllGPSPoints retorna todos os pontos GPS processados para uma atividade
+// GetAllGPSPoints retorna pontos GPS selecionados inteligentemente para marcadores
 func (a *App) GetAllGPSPoints(activityID int64) ([]FrontendGPSPoint, error) {
+	if a.stravaClient == nil {
+		return nil, fmt.Errorf("not authenticated")
+	}
+
+	detail, err := a.stravaClient.GetActivityDetail(activityID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get activity detail: %w", err)
+	}
+
+	streams, err := a.stravaClient.GetActivityStreams(activityID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get activity streams: %w", err)
+	}
+
+	// Valida streams
+	timeStream, timeExists := streams["time"]
+	latlngStream, latlngExists := streams["latlng"]
+	if !timeExists || !latlngExists || timeStream.Data == nil || latlngStream.Data == nil {
+		return nil, fmt.Errorf("streams GPS ausentes ou vazios")
+	}
+
+	processor := gps.NewGPSProcessor()
+	err = processor.ProcessStreamData(
+		timeStream.Data.([]interface{}),
+		latlngStream.Data.([]interface{}),
+		streams["velocity_smooth"].Data.([]interface{}),
+		streams["altitude"].Data.([]interface{}),
+		detail.StartDate,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to process GPS data: %w", err)
+	}
+
+	// Pega TODOS os pontos interpolados
+	allPoints := processor.GetAllPoints()
+
+	// NOVA LÓGICA DE FILTRAGEM INTELIGENTE
+	selectedPoints := a.selectIntelligentGPSPoints(allPoints)
+
+	// Converte para formato frontend
+	var frontendPoints []FrontendGPSPoint
+	for _, point := range selectedPoints {
+		frontendPoints = append(frontendPoints, FrontendGPSPoint{
+			Time:     point.Time.Format(time.RFC3339),
+			Lat:      point.Lat,
+			Lng:      point.Lng,
+			Velocity: point.Velocity,
+			Altitude: point.Altitude,
+			Bearing:  point.Bearing,
+			GForce:   point.GForce,
+		})
+	}
+
+	fmt.Printf("DEBUG: Selecionados %d pontos GPS inteligentes de %d pontos interpolados totais\n", len(selectedPoints), len(allPoints))
+	return frontendPoints, nil
+}
+
+// NOVA FUNÇÃO: Seleção inteligente de pontos GPS para marcadores
+func (a *App) selectIntelligentGPSPoints(allPoints []gps.GPSPoint) []gps.GPSPoint {
+	if len(allPoints) == 0 {
+		return allPoints
+	}
+
+	var selectedPoints []gps.GPSPoint
+
+	// Sempre inclui o primeiro ponto
+	selectedPoints = append(selectedPoints, allPoints[0])
+
+	// Parâmetros da seleção inteligente
+	minTimeInterval := 30 * time.Second       // Mínimo 30 segundos entre pontos
+	maxTimeInterval := 120 * time.Second      // Máximo 2 minutos sem ponto
+	minSpeedChange := 5.0 * (1000.0 / 3600.0) // 5 km/h em m/s
+	minDistanceChange := 100.0                // 100 metros
+
+	lastSelectedTime := allPoints[0].Time
+	lastSelectedSpeed := allPoints[0].Velocity
+	lastSelectedPoint := allPoints[0]
+
+	for i := 1; i < len(allPoints)-1; i++ {
+		currentPoint := allPoints[i]
+		timeSinceLastSelected := currentPoint.Time.Sub(lastSelectedTime)
+		speedChange := math.Abs(currentPoint.Velocity - lastSelectedSpeed)
+
+		// Calcula distância desde o último ponto selecionado
+		distance := a.calculateDistance(lastSelectedPoint, currentPoint)
+
+		// Critérios para seleção:
+		shouldSelect := false
+
+		// 1. Intervalo de tempo obrigatório (máximo)
+		if timeSinceLastSelected >= maxTimeInterval {
+			shouldSelect = true
+		}
+
+		// 2. Mudança significativa de velocidade (após tempo mínimo)
+		if timeSinceLastSelected >= minTimeInterval && speedChange >= minSpeedChange {
+			shouldSelect = true
+		}
+
+		// 3. Distância significativa percorrida
+		if timeSinceLastSelected >= minTimeInterval && distance >= minDistanceChange {
+			shouldSelect = true
+		}
+
+		// 4. Pontos de parada (velocidade muito baixa)
+		if currentPoint.Velocity < 1.0 && lastSelectedSpeed > 3.0 {
+			shouldSelect = true
+		}
+
+		// 5. Retomada de movimento (após parada)
+		if currentPoint.Velocity > 3.0 && lastSelectedSpeed < 1.0 {
+			shouldSelect = true
+		}
+
+		// 6. Picos de velocidade
+		if currentPoint.Velocity > 15.0 && // > 54 km/h
+			timeSinceLastSelected >= minTimeInterval &&
+			speedChange >= minSpeedChange {
+			shouldSelect = true
+		}
+
+		if shouldSelect {
+			selectedPoints = append(selectedPoints, currentPoint)
+			lastSelectedTime = currentPoint.Time
+			lastSelectedSpeed = currentPoint.Velocity
+			lastSelectedPoint = currentPoint
+		}
+	}
+
+	// Sempre inclui o último ponto
+	if len(allPoints) > 1 {
+		lastPoint := allPoints[len(allPoints)-1]
+		// Só adiciona se não for muito próximo do penúltimo selecionado
+		if len(selectedPoints) == 0 || lastPoint.Time.Sub(selectedPoints[len(selectedPoints)-1].Time) > 10*time.Second {
+			selectedPoints = append(selectedPoints, lastPoint)
+		}
+	}
+
+	fmt.Printf("DEBUG: Seleção inteligente - critérios aplicados:\n")
+	fmt.Printf("  - Intervalo mínimo: %v\n", minTimeInterval)
+	fmt.Printf("  - Intervalo máximo: %v\n", maxTimeInterval)
+	fmt.Printf("  - Mudança mín. velocidade: %.1f km/h\n", minSpeedChange*3.6)
+	fmt.Printf("  - Distância mínima: %.0f m\n", minDistanceChange)
+
+	return selectedPoints
+}
+
+// GetFullGPSTrajectory retorna TODOS os pontos GPS interpolados para desenhar o trajeto completo
+func (a *App) GetFullGPSTrajectory(activityID int64) ([]FrontendGPSPoint, error) {
 	if a.stravaClient == nil {
 		return nil, fmt.Errorf("not authenticated")
 	}
@@ -387,19 +537,13 @@ func (a *App) GetAllGPSPoints(activityID int64) ([]FrontendGPSPoint, error) {
 		return nil, fmt.Errorf("failed to process GPS data: %w", err)
 	}
 
-	// Pega todos os pontos processados
+	// DIFERENÇA: Pega TODOS os pontos, sem filtragem
 	allPoints := processor.GetAllPoints()
 
-	// Filtra pontos para reduzir densidade (pega 1 a cada 10 pontos para não sobrecarregar o mapa)
-	var filteredPoints []FrontendGPSPoint
-	step := len(allPoints) / 100 // Máximo 100 pontos no mapa
-	if step < 1 {
-		step = 1
-	}
-
-	for i := 0; i < len(allPoints); i += step {
-		point := allPoints[i]
-		filteredPoints = append(filteredPoints, FrontendGPSPoint{
+	// Converte todos os pontos para o formato frontend
+	var fullTrajectory []FrontendGPSPoint
+	for _, point := range allPoints {
+		fullTrajectory = append(fullTrajectory, FrontendGPSPoint{
 			Time:     point.Time.Format(time.RFC3339),
 			Lat:      point.Lat,
 			Lng:      point.Lng,
@@ -410,6 +554,129 @@ func (a *App) GetAllGPSPoints(activityID int64) ([]FrontendGPSPoint, error) {
 		})
 	}
 
-	fmt.Printf("DEBUG: Retornando %d pontos GPS filtrados de %d pontos totais\n", len(filteredPoints), len(allPoints))
-	return filteredPoints, nil
+	fmt.Printf("DEBUG: Retornando trajeto COMPLETO com %d pontos GPS interpolados\n", len(fullTrajectory))
+	return fullTrajectory, nil
+}
+
+// FUNÇÃO AUXILIAR: Calcula distância entre dois pontos GPS (CORRIGIDA)
+func (a *App) calculateDistance(p1, p2 gps.GPSPoint) float64 {
+	const R = 6371000 // Raio da Terra em metros
+
+	lat1Rad := p1.Lat * math.Pi / 180
+	lon1Rad := p1.Lng * math.Pi / 180
+	lat2Rad := p2.Lat * math.Pi / 180
+	lon2Rad := p2.Lng * math.Pi / 180
+
+	dLat := lat2Rad - lat1Rad
+	dLon := lon2Rad - lon1Rad
+
+	// CORREÇÃO: Usar variável diferente de 'a' para evitar conflito
+	haversineA := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(lat1Rad)*math.Cos(lat2Rad)*math.Sin(dLon/2)*math.Sin(dLon/2)
+	c := 2 * math.Atan2(math.Sqrt(haversineA), math.Sqrt(1-haversineA))
+
+	return R * c
+}
+
+// FUNÇÃO ADICIONAL: Versão com densidade customizável
+func (a *App) GetGPSPointsWithDensity(activityID int64, density string) ([]FrontendGPSPoint, error) {
+	if a.stravaClient == nil {
+		return nil, fmt.Errorf("not authenticated")
+	}
+
+	detail, err := a.stravaClient.GetActivityDetail(activityID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get activity detail: %w", err)
+	}
+
+	streams, err := a.stravaClient.GetActivityStreams(activityID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get activity streams: %w", err)
+	}
+
+	// Valida streams
+	timeStream, timeExists := streams["time"]
+	latlngStream, latlngExists := streams["latlng"]
+	if !timeExists || !latlngExists || timeStream.Data == nil || latlngStream.Data == nil {
+		return nil, fmt.Errorf("streams GPS ausentes ou vazios")
+	}
+
+	processor := gps.NewGPSProcessor()
+	err = processor.ProcessStreamData(
+		timeStream.Data.([]interface{}),
+		latlngStream.Data.([]interface{}),
+		streams["velocity_smooth"].Data.([]interface{}),
+		streams["altitude"].Data.([]interface{}),
+		detail.StartDate,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to process GPS data: %w", err)
+	}
+
+	allPoints := processor.GetAllPoints()
+	var selectedPoints []gps.GPSPoint
+
+	// Seleção baseada na densidade escolhida
+	switch density {
+	case "high":
+		// A cada 15 segundos
+		selectedPoints = a.selectPointsByInterval(allPoints, 15*time.Second)
+	case "medium":
+		// A cada 30 segundos (padrão inteligente)
+		selectedPoints = a.selectIntelligentGPSPoints(allPoints)
+	case "low":
+		// A cada 60 segundos
+		selectedPoints = a.selectPointsByInterval(allPoints, 60*time.Second)
+	case "ultra_high":
+		// A cada 5 segundos (para debug/sincronização precisa)
+		selectedPoints = a.selectPointsByInterval(allPoints, 5*time.Second)
+	default:
+		selectedPoints = a.selectIntelligentGPSPoints(allPoints)
+	}
+
+	// Converte para formato frontend
+	var frontendPoints []FrontendGPSPoint
+	for _, point := range selectedPoints {
+		frontendPoints = append(frontendPoints, FrontendGPSPoint{
+			Time:     point.Time.Format(time.RFC3339),
+			Lat:      point.Lat,
+			Lng:      point.Lng,
+			Velocity: point.Velocity,
+			Altitude: point.Altitude,
+			Bearing:  point.Bearing,
+			GForce:   point.GForce,
+		})
+	}
+
+	fmt.Printf("DEBUG: Densidade '%s' - %d pontos selecionados de %d totais\n", density, len(selectedPoints), len(allPoints))
+	return frontendPoints, nil
+}
+
+// FUNÇÃO AUXILIAR: Seleção por intervalo fixo
+func (a *App) selectPointsByInterval(allPoints []gps.GPSPoint, interval time.Duration) []gps.GPSPoint {
+	if len(allPoints) == 0 {
+		return allPoints
+	}
+
+	var selectedPoints []gps.GPSPoint
+	selectedPoints = append(selectedPoints, allPoints[0]) // Primeiro ponto
+
+	lastSelectedTime := allPoints[0].Time
+
+	for _, point := range allPoints[1:] {
+		if point.Time.Sub(lastSelectedTime) >= interval {
+			selectedPoints = append(selectedPoints, point)
+			lastSelectedTime = point.Time
+		}
+	}
+
+	// Último ponto
+	if len(allPoints) > 1 {
+		lastPoint := allPoints[len(allPoints)-1]
+		if lastPoint.Time.Sub(lastSelectedTime) > 5*time.Second {
+			selectedPoints = append(selectedPoints, lastPoint)
+		}
+	}
+
+	return selectedPoints
 }

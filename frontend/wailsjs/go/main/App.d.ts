@@ -11,9 +11,13 @@ export function GetActivityDetail(arg1:number):Promise<strava.ActivityDetail>;
 
 export function GetAllGPSPoints(arg1:number):Promise<Array<main.FrontendGPSPoint>>;
 
+export function GetFullGPSTrajectory(arg1:number):Promise<Array<main.FrontendGPSPoint>>;
+
 export function GetGPSPointForMapClick(arg1:number,arg2:number,arg3:number):Promise<main.FrontendGPSPoint>;
 
 export function GetGPSPointForVideoTime(arg1:number,arg2:string):Promise<main.FrontendGPSPoint>;
+
+export function GetGPSPointsWithDensity(arg1:number,arg2:string):Promise<Array<main.FrontendGPSPoint>>;
 
 export function ProcessVideoOverlay(arg1:number,arg2:string,arg3:string):Promise<string>;
 

@@ -18,12 +18,20 @@ export function GetAllGPSPoints(arg1) {
   return window['go']['main']['App']['GetAllGPSPoints'](arg1);
 }
 
+export function GetFullGPSTrajectory(arg1) {
+  return window['go']['main']['App']['GetFullGPSTrajectory'](arg1);
+}
+
 export function GetGPSPointForMapClick(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetGPSPointForMapClick'](arg1, arg2, arg3);
 }
 
 export function GetGPSPointForVideoTime(arg1, arg2) {
   return window['go']['main']['App']['GetGPSPointForVideoTime'](arg1, arg2);
+}
+
+export function GetGPSPointsWithDensity(arg1, arg2) {
+  return window['go']['main']['App']['GetGPSPointsWithDensity'](arg1, arg2);
 }
 
 export function ProcessVideoOverlay(arg1, arg2, arg3) {
