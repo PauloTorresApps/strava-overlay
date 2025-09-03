@@ -52,8 +52,10 @@ func NewGenerator() *Generator {
 	}
 
 	return &Generator{
-		width:      400, // Largura mantida
-		height:     450, // Altura aumentada para evitar cortes
+		// --- MODIFICAÇÃO: Dimensões otimizadas ---
+		width:  300, // Largura reduzida de 400 para 300
+		height: 300, // Altura ajustada para o conteúdo
+		// -----------------------------------------------------------
 		tempDir:    tempDir,
 		fontLoaded: false,
 		fontPath:   fontPath,
@@ -122,9 +124,11 @@ func (g *Generator) generateCircularOverlay(point gps.GPSPoint, maxSpeed float64
 	dc.Clear()
 
 	centerX := float64(g.width) / 2
-	centerY := float64(g.width) / 2
+	centerY := float64(g.width) / 2 // Mantém a proporção circular
 
-	digitalSpeedY := float64(g.height) - 60.0
+	// --- MODIFICAÇÃO: Posição Y do texto da velocidade ajustada para baixo ---
+	digitalSpeedY := centerY + 68.0
+	// --------------------------------------------------------------------
 
 	// --- Desenha os Componentes ---
 	g.drawSpeedometerArc(dc, centerX, centerY, point.Velocity*3.6, maxSpeed)
@@ -136,31 +140,38 @@ func (g *Generator) generateCircularOverlay(point gps.GPSPoint, maxSpeed float64
 
 // drawSpeedometerArc desenha o arco do velocímetro e as marcações.
 func (g *Generator) drawSpeedometerArc(dc *gg.Context, cx, cy float64, speed, maxSpeed float64) {
-	radius := 150.0
+	// --- MODIFICAÇÃO: Valores ajustados para a nova escala ---
+	radius := 110.0       // Raio reduzido de 150.0
+	lineWidth := 20.0     // Largura da linha reduzida de 25
+	progressWidth := 18.0 // Largura do progresso reduzida de 22
+	fontSize := 14.0      // Tamanho da fonte reduzido de 18
+	textOffset := 25.0    // Deslocamento do texto ajustado
+	// --------------------------------------------------------
+
 	startAngle := gg.Radians(135)
 	totalArc := gg.Radians(270)
-	g.loadFont(dc, 18)
+	g.loadFont(dc, fontSize)
 
-	// 1. Cria a máscara para o efeito de desvanecimento em um contexto temporário.
+	// 1. Cria a máscara para o efeito de desvanecimento.
 	maskContext := gg.NewContext(g.width, g.height)
-	maskGradient := gg.NewLinearGradient(cx, cy+radius-50, cx, cy+radius+25)
-	maskGradient.AddColorStop(0, color.White) // Manter (opaco)
-	maskGradient.AddColorStop(1, color.Black) // Apagar (transparente na máscara)
+	maskGradient := gg.NewLinearGradient(cx, cy+radius-40, cx, cy+radius+20)
+	maskGradient.AddColorStop(0, color.White)
+	maskGradient.AddColorStop(1, color.Black)
 	maskContext.SetFillStyle(maskGradient)
 	maskContext.DrawRectangle(0, 0, float64(g.width), float64(g.height))
 	maskContext.Fill()
 
 	// 2. Desenha o círculo de fundo usando a máscara.
-	dc.Push() // Salva o estado atual do contexto (sem máscara)
+	dc.Push()
 	dc.SetMask(maskContext.AsMask())
-	dc.SetLineWidth(25)
-	dc.SetRGBA(0.1, 0.1, 0.1, 0.5) // Cor sólida com 50% de transparência
+	dc.SetLineWidth(lineWidth)
+	dc.SetRGBA(0.1, 0.1, 0.1, 0.5)
 	dc.DrawCircle(cx, cy, radius)
 	dc.Stroke()
-	dc.Pop() // Restaura o estado anterior, removendo a máscara.
+	dc.Pop()
 
 	// 3. Desenha o arco de progresso por cima.
-	dc.SetLineWidth(22)
+	dc.SetLineWidth(progressWidth)
 	progress := speed / maxSpeed
 	if progress > 1 {
 		progress = 1
@@ -175,20 +186,20 @@ func (g *Generator) drawSpeedometerArc(dc *gg.Context, cx, cy float64, speed, ma
 	dc.Stroke()
 
 	// 4. Marcadores e números
-	dc.SetLineWidth(3)
+	dc.SetLineWidth(2) // Linha mais fina para os marcadores
 	dc.SetRGBA(1, 1, 1, 0.9)
 	for i := 0.0; i <= maxSpeed; i += 10 {
 		angle := startAngle + (totalArc * (i / maxSpeed))
 		if i/maxSpeed <= 1.0 {
-			x1 := cx + (radius-16)*math.Cos(angle)
-			y1 := cy + (radius-16)*math.Sin(angle)
-			x2 := cx + (radius-8)*math.Cos(angle)
-			y2 := cy + (radius-8)*math.Sin(angle)
+			x1 := cx + (radius-12)*math.Cos(angle) // Ajustado
+			y1 := cy + (radius-12)*math.Sin(angle) // Ajustado
+			x2 := cx + (radius-6)*math.Cos(angle)  // Ajustado
+			y2 := cy + (radius-6)*math.Sin(angle)  // Ajustado
 			dc.DrawLine(x1, y1, x2, y2)
 			dc.Stroke()
 
-			textX := cx + (radius-35)*math.Cos(angle)
-			textY := cy + (radius-35)*math.Sin(angle)
+			textX := cx + (radius-textOffset)*math.Cos(angle)
+			textY := cy + (radius-textOffset)*math.Sin(angle)
 			if g.fontLoaded {
 				dc.DrawStringAnchored(fmt.Sprintf("%.0f", i), textX, textY, 0.5, 0.5)
 			}
@@ -198,14 +209,18 @@ func (g *Generator) drawSpeedometerArc(dc *gg.Context, cx, cy float64, speed, ma
 
 // drawCompass desenha a bússola no centro do velocímetro.
 func (g *Generator) drawCompass(dc *gg.Context, cx, cy float64, bearing float64) {
-	radius := 70.0
-	g.loadFont(dc, 16)
+	// --- MODIFICAÇÃO: Valores ajustados para a nova escala ---
+	radius := 50.0   // Raio reduzido de 70.0
+	fontSize := 12.0 // Tamanho da fonte reduzido de 16
+	// --------------------------------------------------------
+
+	g.loadFont(dc, fontSize)
 
 	dc.SetRGBA(0.1, 0.1, 0.1, 0.7)
 	dc.DrawCircle(cx, cy, radius)
 	dc.Fill()
 
-	dc.SetLineWidth(2)
+	dc.SetLineWidth(1.5) // Linha mais fina
 	dc.SetRGBA(0.5, 0.5, 0.5, 1)
 	dc.DrawCircle(cx, cy, radius)
 	dc.Stroke()
@@ -215,8 +230,8 @@ func (g *Generator) drawCompass(dc *gg.Context, cx, cy float64, bearing float64)
 		cardinals := map[string]float64{"N": 270, "E": 0, "S": 90, "W": 180}
 		for text, angle := range cardinals {
 			rad := gg.Radians(angle)
-			textX := cx + (radius-15)*math.Cos(rad)
-			textY := cy + (radius-15)*math.Sin(rad)
+			textX := cx + (radius-12)*math.Cos(rad) // Ajustado
+			textY := cy + (radius-12)*math.Sin(rad) // Ajustado
 			dc.DrawStringAnchored(text, textX, textY, 0.5, 0.5)
 		}
 	}
@@ -225,17 +240,18 @@ func (g *Generator) drawCompass(dc *gg.Context, cx, cy float64, bearing float64)
 	dc.Translate(cx, cy)
 	dc.Rotate(gg.Radians(bearing))
 
+	// Ponteiro da bússola ajustado
 	dc.SetRGBA(1, 0.2, 0.2, 1)
-	dc.MoveTo(0, -radius+15)
-	dc.LineTo(-12, 0)
-	dc.LineTo(12, 0)
+	dc.MoveTo(0, -radius+12)
+	dc.LineTo(-9, 0)
+	dc.LineTo(9, 0)
 	dc.ClosePath()
 	dc.Fill()
 
 	dc.SetRGBA(1, 1, 1, 1)
-	dc.MoveTo(0, radius-15)
-	dc.LineTo(-12, 0)
-	dc.LineTo(12, 0)
+	dc.MoveTo(0, radius-12)
+	dc.LineTo(-9, 0)
+	dc.LineTo(9, 0)
 	dc.ClosePath()
 	dc.Fill()
 
@@ -244,13 +260,15 @@ func (g *Generator) drawCompass(dc *gg.Context, cx, cy float64, bearing float64)
 
 // drawDigitalSpeed desenha o valor numérico da velocidade na parte inferior.
 func (g *Generator) drawDigitalSpeed(dc *gg.Context, cx, cy float64, speed float64) {
-	g.loadFont(dc, 35)
-	dc.SetRGBA(1, 1, 1, 1)
+	// --- MODIFICAÇÃO: Cor da fonte alterada para azul néon ---
+	g.loadFont(dc, 28)
+	dc.SetRGB255(0, 221, 255) // Cor azul néon vivo
 	dc.DrawStringAnchored(fmt.Sprintf("%.1f", speed), cx, cy, 0.5, 0.5)
 
-	g.loadFont(dc, 18)
-	dc.SetRGBA(0.8, 0.8, 0.8, 1)
-	dc.DrawStringAnchored("km/h", cx, cy+30, 0.5, 0.5)
+	g.loadFont(dc, 14)
+	dc.SetRGB255(0, 221, 255) // Cor azul néon para consistência
+	dc.DrawStringAnchored("km/h", cx, cy+20, 0.5, 0.5)
+	// --------------------------------------------------
 }
 
 // Cleanup remove o diretório temporário.
