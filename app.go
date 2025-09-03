@@ -351,3 +351,65 @@ func (a *App) ProcessVideoOverlay(activityID int64, videoPath string, manualStar
 	}
 	return outputPath, nil
 }
+
+// GetAllGPSPoints retorna todos os pontos GPS processados para uma atividade
+func (a *App) GetAllGPSPoints(activityID int64) ([]FrontendGPSPoint, error) {
+	if a.stravaClient == nil {
+		return nil, fmt.Errorf("not authenticated")
+	}
+
+	detail, err := a.stravaClient.GetActivityDetail(activityID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get activity detail: %w", err)
+	}
+
+	streams, err := a.stravaClient.GetActivityStreams(activityID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get activity streams: %w", err)
+	}
+
+	// Valida streams
+	timeStream, timeExists := streams["time"]
+	latlngStream, latlngExists := streams["latlng"]
+	if !timeExists || !latlngExists || timeStream.Data == nil || latlngStream.Data == nil {
+		return nil, fmt.Errorf("streams GPS ausentes ou vazios")
+	}
+
+	processor := gps.NewGPSProcessor()
+	err = processor.ProcessStreamData(
+		streams["time"].Data.([]interface{}),
+		streams["latlng"].Data.([]interface{}),
+		streams["velocity_smooth"].Data.([]interface{}),
+		streams["altitude"].Data.([]interface{}),
+		detail.StartDate,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to process GPS data: %w", err)
+	}
+
+	// Pega todos os pontos processados
+	allPoints := processor.GetAllPoints()
+
+	// Filtra pontos para reduzir densidade (pega 1 a cada 10 pontos para não sobrecarregar o mapa)
+	var filteredPoints []FrontendGPSPoint
+	step := len(allPoints) / 100 // Máximo 100 pontos no mapa
+	if step < 1 {
+		step = 1
+	}
+
+	for i := 0; i < len(allPoints); i += step {
+		point := allPoints[i]
+		filteredPoints = append(filteredPoints, FrontendGPSPoint{
+			Time:     point.Time.Format(time.RFC3339),
+			Lat:      point.Lat,
+			Lng:      point.Lng,
+			Velocity: point.Velocity,
+			Altitude: point.Altitude,
+			Bearing:  point.Bearing,
+			GForce:   point.GForce,
+		})
+	}
+
+	fmt.Printf("DEBUG: Retornando %d pontos GPS filtrados de %d pontos totais\n", len(filteredPoints), len(allPoints))
+	return filteredPoints, nil
+}

@@ -174,6 +174,10 @@ function displayActivityDetail(detail) {
     `;
 }
 
+// ========================================
+// 2. SUBSTITUIR NO frontend/main.js
+// ========================================
+
 async function displayMap(activity) {
     console.log("Inicializando mapa para a atividade:", activity.name);
     
@@ -198,30 +202,19 @@ async function displayMap(activity) {
             
             activityPolyline.on('click', handleMapClick);
 
-            // CORREÇÃO: Busca e adiciona os pontos GPS diretamente aqui para garantir a ordem de execução
-            try {
-                const points = await window.go.main.App.GetAllGPSPoints(activity.id);
-                if (points && points.length > 0) {
-                    points.forEach(point => {
-                        L.circleMarker([point.lat, point.lng], {
-                            radius: 3,
-                            fillColor: "#58a6ff",
-                            fillOpacity: 0.7,
-                            stroke: false
-                        }).addTo(activityMap);
-                    });
-                    console.log(`${points.length} pontos GPS adicionados ao mapa.`);
-                }
-            } catch (error) {
-                console.error("Erro ao adicionar pontos GPS ao mapa:", error);
-            }
-            
+            // Fit bounds primeiro
             activityMap.fitBounds(activityPolyline.getBounds());
             
+            // Adiciona marcadores de início e fim
             L.marker(latlngs[0]).addTo(activityMap).bindPopup('🏁 Início');
             L.marker(latlngs[latlngs.length - 1]).addTo(activityMap).bindPopup('🏆 Fim');
             
             console.log("Mapa inicializado com sucesso");
+
+            // AGORA adiciona os pontos GPS depois que o mapa está pronto
+            setTimeout(async () => {
+                await addGPSMarkersToMap(activity.id);
+            }, 500); // Pequeno delay para garantir que o mapa está renderizado
             
         } else if (activity.start_latlng && activity.start_latlng.length === 2) {
             activityMap = L.map('mapContainer').setView([activity.start_latlng[0], activity.start_latlng[1]], 13);
@@ -238,6 +231,95 @@ async function displayMap(activity) {
     } catch (error) {
         console.error("ERRO AO EXIBIR O MAPA:", error);
         document.getElementById('mapContainer').innerHTML = `<div class="error">Erro ao carregar o mapa: ${error.message}</div>`;
+    }
+}
+
+// NOVA FUNÇÃO para adicionar marcadores GPS
+async function addGPSMarkersToMap(activityId) {
+    try {
+        console.log("Carregando pontos GPS para a atividade:", activityId);
+        showMessage(result, 'Carregando pontos GPS...', 'info');
+
+        const gpsPoints = await window.go.main.App.GetAllGPSPoints(activityId);
+        
+        if (!gpsPoints || gpsPoints.length === 0) {
+            console.log("Nenhum ponto GPS encontrado");
+            showMessage(result, '', ''); // Limpa mensagem
+            return;
+        }
+
+        console.log(`Adicionando ${gpsPoints.length} marcadores GPS ao mapa`);
+
+        // Cria um grupo de camadas para os marcadores GPS
+        const gpsMarkersGroup = L.layerGroup().addTo(activityMap);
+
+        // Adiciona cada ponto como um pequeno marcador circular
+        gpsPoints.forEach((point, index) => {
+            const speed = point.velocity * 3.6; // m/s para km/h
+            
+            // Cor baseada na velocidade
+            let color = '#58a6ff'; // Azul padrão
+            if (speed > 30) color = '#f85149'; // Vermelho para alta velocidade
+            else if (speed > 15) color = '#ffa657'; // Laranja para média velocidade
+            else if (speed > 5) color = '#56d364'; // Verde para baixa velocidade
+
+            const marker = L.circleMarker([point.lat, point.lng], {
+                radius: 4,
+                fillColor: color,
+                fillOpacity: 0.7,
+                color: '#ffffff',
+                weight: 1,
+                opacity: 0.8
+            });
+
+            // Popup com informações do ponto
+            const time = new Date(point.time).toLocaleTimeString('pt-BR');
+            marker.bindPopup(`
+                <div style="font-size: 12px;">
+                    <strong>⏰ ${time}</strong><br>
+                    📍 ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}<br>
+                    🏃 ${speed.toFixed(1)} km/h<br>
+                    ⛰️ ${point.altitude.toFixed(0)}m<br>
+                    🧭 ${point.bearing.toFixed(0)}°
+                </div>
+            `);
+
+            // Adiciona ao grupo
+            gpsMarkersGroup.addLayer(marker);
+        });
+
+        // Controle de camadas para mostrar/ocultar marcadores
+        const overlayMaps = {
+            "📍 Pontos GPS": gpsMarkersGroup
+        };
+        
+        L.control.layers(null, overlayMaps, { 
+            position: 'topright',
+            collapsed: false 
+        }).addTo(activityMap);
+
+        console.log(`${gpsPoints.length} marcadores GPS adicionados com sucesso`);
+        showMessage(result, `${gpsPoints.length} pontos GPS carregados no mapa`, 'success');
+
+        // Limpa a mensagem após 3 segundos
+        setTimeout(() => {
+            showMessage(result, '', '');
+        }, 3000);
+
+    } catch (error) {
+        console.error("Erro ao carregar pontos GPS:", error);
+        showMessage(result, `Erro ao carregar pontos GPS: ${error}`, 'error');
+    }
+}
+
+// FUNÇÃO AUXILIAR para resetar marcadores quando necessário
+function clearGPSMarkers() {
+    if (activityMap) {
+        activityMap.eachLayer((layer) => {
+            if (layer instanceof L.CircleMarker && !(layer instanceof L.Marker)) {
+                activityMap.removeLayer(layer);
+            }
+        });
     }
 }
 

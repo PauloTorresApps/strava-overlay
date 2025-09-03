@@ -337,3 +337,89 @@ body {
     margin-bottom: 1rem;
     font-style: italic;
 }
+
+/* Estilo customizado para os controles de camada */
+.leaflet-control-layers {
+    background: #161b22 !important;
+    border: 1px solid #30363d !important;
+    border-radius: 6px !important;
+    color: #c9d1d9 !important;
+}
+
+.leaflet-control-layers-toggle {
+    background-color: #21262d !important;
+    border: 1px solid #30363d !important;
+}
+
+.leaflet-control-layers label {
+    color: #c9d1d9 !important;
+    font-size: 12px !important;
+}
+
+.leaflet-control-layers input[type="checkbox"] {
+    accent-color: #58a6ff !important;
+}
+
+/* Tooltip customizado para marcadores GPS */
+.leaflet-tooltip {
+    background: #161b22 !important;
+    border: 1px solid #30363d !important;
+    color: #c9d1d9 !important;
+    border-radius: 4px !important;
+    font-size: 11px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+}
+
+.leaflet-tooltip-top:before {
+    border-top-color: #161b22 !important;
+}
+
+.leaflet-tooltip-bottom:before {
+    border-bottom-color: #161b22 !important;
+}
+
+.leaflet-tooltip-left:before {
+    border-left-color: #161b22 !important;
+}
+
+.leaflet-tooltip-right:before {
+    border-right-color: #161b22 !important;
+}
+
+/* Animação suave para os marcadores */
+.leaflet-marker-pane .leaflet-marker-icon {
+    transition: transform 0.2s ease !important;
+}
+
+.leaflet-marker-pane .leaflet-marker-icon:hover {
+    transform: scale(1.2) !important;
+    z-index: 1000 !important;
+}
+
+/* Estilo para a legenda de velocidade */
+.speed-legend {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background: rgba(22, 27, 34, 0.9);
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 11px;
+    color: #c9d1d9;
+    z-index: 1000;
+}
+
+.speed-legend-item {
+    display: flex;
+    align-items: center;
+    margin: 2px 0;
+}
+
+.speed-legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 6px;
+    border: 1px solid #ffffff;
+}

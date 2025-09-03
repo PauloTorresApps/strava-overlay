@@ -14,6 +14,10 @@ export function GetActivityDetail(arg1) {
   return window['go']['main']['App']['GetActivityDetail'](arg1);
 }
 
+export function GetAllGPSPoints(arg1) {
+  return window['go']['main']['App']['GetAllGPSPoints'](arg1);
+}
+
 export function GetGPSPointForMapClick(arg1, arg2, arg3) {
   return window['go']['main']['App']['GetGPSPointForMapClick'](arg1, arg2, arg3);
 }
