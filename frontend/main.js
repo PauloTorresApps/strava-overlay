@@ -174,7 +174,7 @@ function displayActivityDetail(detail) {
     `;
 }
 
-function displayMap(activity) {
+async function displayMap(activity) {
     console.log("Inicializando mapa para a atividade:", activity.name);
     
     try {
@@ -196,8 +196,25 @@ function displayMap(activity) {
             const latlngs = L.Polyline.fromEncoded(activity.map.summary_polyline).getLatLngs();
             activityPolyline = L.polyline(latlngs, { color: '#f85149', weight: 3 }).addTo(activityMap);
             
-            // Adiciona o listener de clique para a sincronização manual
             activityPolyline.on('click', handleMapClick);
+
+            // CORREÇÃO: Busca e adiciona os pontos GPS diretamente aqui para garantir a ordem de execução
+            try {
+                const points = await window.go.main.App.GetAllGPSPoints(activity.id);
+                if (points && points.length > 0) {
+                    points.forEach(point => {
+                        L.circleMarker([point.lat, point.lng], {
+                            radius: 3,
+                            fillColor: "#58a6ff",
+                            fillOpacity: 0.7,
+                            stroke: false
+                        }).addTo(activityMap);
+                    });
+                    console.log(`${points.length} pontos GPS adicionados ao mapa.`);
+                }
+            } catch (error) {
+                console.error("Erro ao adicionar pontos GPS ao mapa:", error);
+            }
             
             activityMap.fitBounds(activityPolyline.getBounds());
             
@@ -223,6 +240,8 @@ function displayMap(activity) {
         document.getElementById('mapContainer').innerHTML = `<div class="error">Erro ao carregar o mapa: ${error.message}</div>`;
     }
 }
+
+// A função addAllGpsPointsToMap foi removida e sua lógica integrada em displayMap
 
 // Função para lidar com o clique no mapa para sincronização manual
 async function handleMapClick(e) {
@@ -278,8 +297,9 @@ function updateVideoStartMarker(lat, lng, popupText) {
     setTimeout(() => {
         try {
             activityMap.invalidateSize();
-            activityMap.panTo([lat, lng]);
-            console.log("Mapa centralizado no novo marcador de início.");
+            // Usar setView para centralizar e aplicar zoom.
+            activityMap.setView([lat, lng], 16);
+            console.log("Mapa centralizado e com zoom no novo marcador de início.");
         } catch (error) {
             console.error("Erro ao centralizar mapa no marcador:", error);
         }
@@ -398,3 +418,4 @@ function translateActivityType(type) {
     };
     return translations[type] || type;
 }
+

@@ -269,3 +269,8 @@ func (gp *GPSProcessor) GetPointForCoords(targetLat, targetLng float64) (GPSPoin
 
 	return closestPoint, found
 }
+
+// GetAllPoints retorna todos os pontos GPS processados e interpolados.
+func (gp *GPSProcessor) GetAllPoints() []GPSPoint {
+	return gp.points
+}
