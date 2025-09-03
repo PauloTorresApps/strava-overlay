@@ -2,9 +2,12 @@ package overlay
 
 import (
 	"fmt"
+	"image/color"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"strava-overlay/internal/gps"
 
@@ -12,247 +15,247 @@ import (
 	"golang.org/x/image/font/basicfont"
 )
 
+// Generator cria imagens de overlay.
 type Generator struct {
 	width, height int
 	tempDir       string
+	fontLoaded    bool
+	fontPath      string
 }
 
+// NewGenerator cria um novo gerador de overlay.
 func NewGenerator() *Generator {
-	tempDir, _ := os.MkdirTemp("", "strava_overlays_")
+	tempDir, err := os.MkdirTemp("", "strava_overlays_*")
+	if err != nil {
+		log.Printf("Não foi possível criar o diretório temporário: %v", err)
+		tempDir = "." // Usa o diretório atual como fallback
+	}
+
+	var fontPath string
+	switch runtime.GOOS {
+	case "windows":
+		fontPath = "C:/Windows/Fonts/arial.ttf"
+	case "darwin":
+		fontPath = "/System/Library/Fonts/Supplemental/Arial.ttf"
+	default: // linux
+		commonFonts := []string{
+			"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+			"/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+			"/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
+		}
+		for _, fp := range commonFonts {
+			if _, err := os.Stat(fp); err == nil {
+				fontPath = fp
+				break
+			}
+		}
+	}
+
 	return &Generator{
-		width:   400,
-		height:  400,
-		tempDir: tempDir,
+		width:      400, // Largura mantida
+		height:     450, // Altura aumentada para evitar cortes
+		tempDir:    tempDir,
+		fontLoaded: false,
+		fontPath:   fontPath,
 	}
 }
 
+// loadFont tenta carregar uma fonte do sistema.
+func (g *Generator) loadFont(dc *gg.Context, size float64) {
+	if g.fontLoaded && g.fontPath != "" {
+		if err := dc.LoadFontFace(g.fontPath, size); err == nil {
+			return
+		}
+	}
+
+	if g.fontPath == "" {
+		dc.SetFontFace(basicfont.Face7x13)
+		g.fontLoaded = false
+		return
+	}
+
+	err := dc.LoadFontFace(g.fontPath, size)
+	if err != nil {
+		log.Printf("Não foi possível carregar a fonte do sistema de %s: %v. Usando fonte básica.", g.fontPath, err)
+		dc.SetFontFace(basicfont.Face7x13)
+		g.fontLoaded = false
+	} else {
+		g.fontLoaded = true
+	}
+}
+
+// GenerateOverlaySequence cria uma sequência de imagens PNG para o overlay.
 func (g *Generator) GenerateOverlaySequence(points []gps.GPSPoint, frameRate float64) ([]string, error) {
 	if len(points) == 0 {
-		return nil, fmt.Errorf("no GPS points provided")
+		return nil, fmt.Errorf("nenhum ponto GPS fornecido")
 	}
 
 	maxSpeed := 0.0
 	for _, point := range points {
-		speed := point.Velocity * 3.6
+		speed := point.Velocity * 3.6 // m/s para km/h
 		if speed > maxSpeed {
 			maxSpeed = speed
 		}
 	}
 	maxSpeedScale := math.Ceil(maxSpeed/10) * 10
-	if maxSpeedScale == 0 {
-		maxSpeedScale = 50
+	if maxSpeedScale < 50 {
+		maxSpeedScale = 50 // Escala mínima
 	}
 
 	var imagePaths []string
 	for i, point := range points {
 		imagePath := filepath.Join(g.tempDir, fmt.Sprintf("overlay_%06d.png", i))
-		err := g.generateSpeedometerImage(point, maxSpeedScale, imagePath)
+		err := g.generateCircularOverlay(point, maxSpeedScale, imagePath)
 		if err != nil {
-			return nil, fmt.Errorf("erro ao gerar overlay %d: %w", i, err)
+			g.Cleanup()
+			return nil, fmt.Errorf("erro ao gerar o frame de overlay %d: %w", i, err)
 		}
 		imagePaths = append(imagePaths, imagePath)
 	}
 	return imagePaths, nil
 }
 
-func (g *Generator) generateSpeedometerImage(point gps.GPSPoint, maxSpeed float64, outputPath string) error {
+// generateCircularOverlay cria um painel circular único com todos os elementos.
+func (g *Generator) generateCircularOverlay(point gps.GPSPoint, maxSpeed float64, outputPath string) error {
 	dc := gg.NewContext(g.width, g.height)
-	dc.SetLineJoin(gg.LineJoinRound)
-	dc.SetLineCap(gg.LineCapRound)
-	dc.SetRGBA(0, 0, 0, 0)
+	dc.SetRGBA(0, 0, 0, 0) // Fundo transparente para o PNG
 	dc.Clear()
 
 	centerX := float64(g.width) / 2
-	centerY := float64(g.height)/2 - 20
-	radius := 80.0
-	currentSpeed := point.Velocity * 3.6
+	centerY := float64(g.width) / 2
 
-	// VELOCÍMETRO
-	dc.SetRGBA(0.08, 0.08, 0.08, 0.95)
-	dc.DrawCircle(centerX, centerY, radius)
-	dc.Fill()
-	dc.SetRGBA(0.6, 0.6, 0.6, 0.8)
-	dc.SetLineWidth(2)
-	dc.DrawCircle(centerX, centerY, radius)
-	dc.Stroke()
+	digitalSpeedY := float64(g.height) - 60.0
 
-	// MARCAÇÕES E NÚMEROS
-	startAngle := 135 * math.Pi / 180
-	totalArc := 270 * math.Pi / 180
-	dc.SetFontFace(basicfont.Face7x13)
-
-	for speed := 0.0; speed <= maxSpeed; speed += 1.0 {
-		angle := startAngle + (speed/maxSpeed)*totalArc
-
-		if int(speed)%5 == 0 {
-			// MARCAÇÃO PRINCIPAL (5 em 5)
-			innerR := radius - 25
-			outerR := radius - 8
-			dc.SetLineWidth(3)
-			dc.SetRGBA(0.9, 0.9, 0.9, 1)
-
-			x1 := centerX + innerR*math.Cos(angle)
-			y1 := centerY + innerR*math.Sin(angle)
-			x2 := centerX + outerR*math.Cos(angle)
-			y2 := centerY + outerR*math.Sin(angle)
-			dc.DrawLine(x1, y1, x2, y2)
-			dc.Stroke()
-
-			// NÚMEROS
-			textR := radius - 35
-			textX := centerX + textR*math.Cos(angle)
-			textY := centerY + textR*math.Sin(angle)
-			dc.SetRGBA(1, 1, 1, 1)
-			dc.DrawStringAnchored(fmt.Sprintf("%.0f", speed), textX, textY, 0.5, 0.5)
-
-		} else {
-			// MARCAÇÃO INTERMEDIÁRIA (1 em 1)
-			innerR := radius - 15
-			outerR := radius - 8
-			dc.SetLineWidth(1)
-			dc.SetRGBA(0.5, 0.5, 0.5, 0.7)
-
-			x1 := centerX + innerR*math.Cos(angle)
-			y1 := centerY + innerR*math.Sin(angle)
-			x2 := centerX + outerR*math.Cos(angle)
-			y2 := centerY + outerR*math.Sin(angle)
-			dc.DrawLine(x1, y1, x2, y2)
-			dc.Stroke()
-		}
-	}
-
-	// ARCO PROGRESSO - ADJACENTE À BORDA
-	progressRatio := currentSpeed / maxSpeed
-	if progressRatio > 1 {
-		progressRatio = 1
-	}
-	progressAngle := startAngle + (progressRatio * totalArc)
-	dc.SetLineWidth(8)
-	dc.SetRGBA(0.1, 1, 0.1, 0.5)
-	dc.DrawArc(centerX, centerY, radius, startAngle, progressAngle)
-	dc.Stroke()
-
-	// BÚSSOLA DESTACADA
-	compassRadius := 35.0
-	g.drawCompass(dc, centerX, centerY, compassRadius, point.Bearing)
-
-	// MEDIDORES LATERAIS
-	gaugeX := centerX - radius - 23
-	g.drawGauge(dc, gaugeX, centerY-45, 25, math.Abs(point.GForce), "G")
-	g.drawGauge(dc, gaugeX, centerY+45, 25, point.Altitude/100, "m")
-
-	// DISPLAY SEM FUNDO
-	dc.SetRGBA(0.1, 1, 0.1, 1)
-	speedText := fmt.Sprintf("%.1f", currentSpeed)
-	for dx := -0.5; dx <= 0.5; dx += 0.5 {
-		for dy := -0.5; dy <= 0.5; dy += 0.5 {
-			dc.DrawStringAnchored(speedText, centerX+dx, centerY+radius*0.6+dy, 0.5, 0.5)
-		}
-	}
-	dc.SetRGBA(0.8, 0.8, 0.8, 0.9)
-	dc.DrawStringAnchored("km/h", centerX, centerY+radius*0.6+15, 0.5, 0.5)
+	// --- Desenha os Componentes ---
+	g.drawSpeedometerArc(dc, centerX, centerY, point.Velocity*3.6, maxSpeed)
+	g.drawCompass(dc, centerX, centerY, point.Bearing)
+	g.drawDigitalSpeed(dc, centerX, digitalSpeedY, point.Velocity*3.6)
 
 	return dc.SavePNG(outputPath)
 }
 
-func (g *Generator) drawCompass(dc *gg.Context, x, y, radius, bearing float64) {
-	// Background
-	dc.SetRGBA(0.12, 0.12, 0.15, 0.5)
-	dc.DrawCircle(x, y, radius)
-	dc.Fill()
-	dc.SetRGBA(0.5, 0.5, 0.6, 0.9)
-	dc.SetLineWidth(2)
-	dc.DrawCircle(x, y, radius)
+// drawSpeedometerArc desenha o arco do velocímetro e as marcações.
+func (g *Generator) drawSpeedometerArc(dc *gg.Context, cx, cy float64, speed, maxSpeed float64) {
+	radius := 150.0
+	startAngle := gg.Radians(135)
+	totalArc := gg.Radians(270)
+	g.loadFont(dc, 18)
+
+	// 1. Cria a máscara para o efeito de desvanecimento em um contexto temporário.
+	maskContext := gg.NewContext(g.width, g.height)
+	maskGradient := gg.NewLinearGradient(cx, cy+radius-50, cx, cy+radius+25)
+	maskGradient.AddColorStop(0, color.White) // Manter (opaco)
+	maskGradient.AddColorStop(1, color.Black) // Apagar (transparente na máscara)
+	maskContext.SetFillStyle(maskGradient)
+	maskContext.DrawRectangle(0, 0, float64(g.width), float64(g.height))
+	maskContext.Fill()
+
+	// 2. Desenha o círculo de fundo usando a máscara.
+	dc.Push() // Salva o estado atual do contexto (sem máscara)
+	dc.SetMask(maskContext.AsMask())
+	dc.SetLineWidth(25)
+	dc.SetRGBA(0.1, 0.1, 0.1, 0.5) // Cor sólida com 50% de transparência
+	dc.DrawCircle(cx, cy, radius)
+	dc.Stroke()
+	dc.Pop() // Restaura o estado anterior, removendo a máscara.
+
+	// 3. Desenha o arco de progresso por cima.
+	dc.SetLineWidth(22)
+	progress := speed / maxSpeed
+	if progress > 1 {
+		progress = 1
+	}
+	progressAngle := startAngle + (totalArc * progress)
+	gradient := gg.NewLinearGradient(cx-radius, cy, cx+radius, cy)
+	gradient.AddColorStop(0, color.RGBA{R: 20, G: 180, B: 20, A: 204})
+	gradient.AddColorStop(0.7, color.RGBA{R: 255, G: 200, B: 0, A: 204})
+	gradient.AddColorStop(1, color.RGBA{R: 220, G: 30, B: 30, A: 204})
+	dc.SetStrokeStyle(gradient)
+	dc.DrawArc(cx, cy, radius, startAngle, progressAngle)
 	dc.Stroke()
 
-	// PONTOS CARDEAIS - REPOSICIONADOS PARA FORA DO VELOCÍMETRO
-	cardinals := []struct {
-		text    string
-		angle   float64
-		r, g, b float64
-	}{
-		{"N", -90, 1, 0.3, 0.3},
-		{"E", 0, 0.9, 0.9, 0.9},
-		{"S", 90, 0.9, 0.9, 0.9},
-		{"W", 180, 0.9, 0.9, 0.9},
-	}
+	// 4. Marcadores e números
+	dc.SetLineWidth(3)
+	dc.SetRGBA(1, 1, 1, 0.9)
+	for i := 0.0; i <= maxSpeed; i += 10 {
+		angle := startAngle + (totalArc * (i / maxSpeed))
+		if i/maxSpeed <= 1.0 {
+			x1 := cx + (radius-16)*math.Cos(angle)
+			y1 := cy + (radius-16)*math.Sin(angle)
+			x2 := cx + (radius-8)*math.Cos(angle)
+			y2 := cy + (radius-8)*math.Sin(angle)
+			dc.DrawLine(x1, y1, x2, y2)
+			dc.Stroke()
 
-	dc.SetFontFace(basicfont.Face7x13)
-	for _, card := range cardinals {
-		angleRad := card.angle * math.Pi / 180
-		// DISTÂNCIA FINAL: 62px da borda
-		textX := x + (radius+60)*math.Cos(angleRad)
-		textY := y + (radius+60)*math.Sin(angleRad)
-
-		// FONTE DEFINIDA SEM FUNDO
-		dc.SetRGBA(card.r, card.g, card.b, 1)
-		// Grid 2x2 para definição aumentada
-		for dx := -0.5; dx <= 0.5; dx += 0.5 {
-			for dy := -0.5; dy <= 0.5; dy += 0.5 {
-				dc.DrawStringAnchored(card.text, textX+dx, textY+dy, 0.5, 0.5)
+			textX := cx + (radius-35)*math.Cos(angle)
+			textY := cy + (radius-35)*math.Sin(angle)
+			if g.fontLoaded {
+				dc.DrawStringAnchored(fmt.Sprintf("%.0f", i), textX, textY, 0.5, 0.5)
 			}
 		}
 	}
+}
 
-	// AGULHA COM BASE LARGA
-	bearingRad := bearing*math.Pi/180 - math.Pi/2
-	needleLength := radius * 0.85
+// drawCompass desenha a bússola no centro do velocímetro.
+func (g *Generator) drawCompass(dc *gg.Context, cx, cy float64, bearing float64) {
+	radius := 70.0
+	g.loadFont(dc, 16)
 
-	// BASE LARGA
-	baseLength := radius * 0.25
-	baseWidth := 6.0
-	baseEndX := x - baseLength*math.Cos(bearingRad)
-	baseEndY := y - baseLength*math.Sin(bearingRad)
-	baseLeftX := baseEndX + baseWidth*math.Cos(bearingRad+math.Pi/2)
-	baseLeftY := baseEndY + baseWidth*math.Sin(bearingRad+math.Pi/2)
-	baseRightX := baseEndX + baseWidth*math.Cos(bearingRad-math.Pi/2)
-	baseRightY := baseEndY + baseWidth*math.Sin(bearingRad-math.Pi/2)
+	dc.SetRGBA(0.1, 0.1, 0.1, 0.7)
+	dc.DrawCircle(cx, cy, radius)
+	dc.Fill()
 
-	dc.SetRGBA(0.9, 0.1, 0.1, 1)
-	dc.MoveTo(x, y)
-	dc.LineTo(baseLeftX, baseLeftY)
-	dc.LineTo(baseRightX, baseRightY)
+	dc.SetLineWidth(2)
+	dc.SetRGBA(0.5, 0.5, 0.5, 1)
+	dc.DrawCircle(cx, cy, radius)
+	dc.Stroke()
+
+	if g.fontLoaded {
+		dc.SetRGBA(1, 1, 1, 0.9)
+		cardinals := map[string]float64{"N": 270, "E": 0, "S": 90, "W": 180}
+		for text, angle := range cardinals {
+			rad := gg.Radians(angle)
+			textX := cx + (radius-15)*math.Cos(rad)
+			textY := cy + (radius-15)*math.Sin(rad)
+			dc.DrawStringAnchored(text, textX, textY, 0.5, 0.5)
+		}
+	}
+
+	dc.Push()
+	dc.Translate(cx, cy)
+	dc.Rotate(gg.Radians(bearing))
+
+	dc.SetRGBA(1, 0.2, 0.2, 1)
+	dc.MoveTo(0, -radius+15)
+	dc.LineTo(-12, 0)
+	dc.LineTo(12, 0)
 	dc.ClosePath()
 	dc.Fill()
 
-	// CORPO DA AGULHA
-	tipX := x + needleLength*math.Cos(bearingRad)
-	tipY := y + needleLength*math.Sin(bearingRad)
-	dc.SetRGBA(1, 0.1, 0.1, 1)
-	dc.SetLineWidth(5)
-	dc.DrawLine(x, y, tipX, tipY)
-	dc.Stroke()
-
-	// RELEVO CENTRAL
-	dc.SetRGBA(1, 0.7, 0.7, 0.9)
-	dc.SetLineWidth(1)
-	dc.DrawLine(baseEndX, baseEndY, tipX, tipY)
-	dc.Stroke()
-
-	// EIXO RECUADO
-	eixoX := x + (radius*0.08)*math.Cos(bearingRad)
-	eixoY := y + (radius*0.08)*math.Sin(bearingRad)
-	dc.SetRGBA(0.2, 0.2, 0.2, 1)
-	dc.DrawCircle(eixoX, eixoY, 4)
-	dc.Fill()
-	dc.SetRGBA(0.7, 0.7, 0.7, 1)
-	dc.DrawCircle(eixoX, eixoY, 3)
-	dc.Fill()
-}
-
-func (g *Generator) drawGauge(dc *gg.Context, x, y, radius, value float64, unit string) {
-	dc.SetRGBA(0.1, 0.1, 0.1, 0.9)
-	dc.DrawCircle(x, y, radius)
-	dc.Fill()
-	dc.SetRGBA(0.5, 0.5, 0.5, 0.8)
-	dc.SetLineWidth(2)
-	dc.DrawCircle(x, y, radius)
-	dc.Stroke()
-	dc.SetFontFace(basicfont.Face7x13)
 	dc.SetRGBA(1, 1, 1, 1)
-	dc.DrawStringAnchored(fmt.Sprintf("%.1f%s", value, unit), x, y, 0.5, 0.5)
+	dc.MoveTo(0, radius-15)
+	dc.LineTo(-12, 0)
+	dc.LineTo(12, 0)
+	dc.ClosePath()
+	dc.Fill()
+
+	dc.Pop()
 }
 
+// drawDigitalSpeed desenha o valor numérico da velocidade na parte inferior.
+func (g *Generator) drawDigitalSpeed(dc *gg.Context, cx, cy float64, speed float64) {
+	g.loadFont(dc, 35)
+	dc.SetRGBA(1, 1, 1, 1)
+	dc.DrawStringAnchored(fmt.Sprintf("%.1f", speed), cx, cy, 0.5, 0.5)
+
+	g.loadFont(dc, 18)
+	dc.SetRGBA(0.8, 0.8, 0.8, 1)
+	dc.DrawStringAnchored("km/h", cx, cy+30, 0.5, 0.5)
+}
+
+// Cleanup remove o diretório temporário.
 func (g *Generator) Cleanup() {
-	os.RemoveAll(g.tempDir)
+	if g.tempDir != "" && g.tempDir != "." {
+		os.RemoveAll(g.tempDir)
+	}
 }
