@@ -32,13 +32,18 @@ type App struct {
 // que é um formato que o Wails e o JavaScript entendem perfeitamente.
 
 type FrontendGPSPoint struct {
-	Time     string  `json:"time"`
-	Lat      float64 `json:"lat"`
-	Lng      float64 `json:"lng"`
-	Velocity float64 `json:"velocity"`
-	Altitude float64 `json:"altitude"`
-	Bearing  float64 `json:"bearing"`
-	GForce   float64 `json:"gForce"`
+	Time      string  `json:"time"`
+	Lat       float64 `json:"lat"`
+	Lng       float64 `json:"lng"`
+	Velocity  float64 `json:"velocity"`
+	Altitude  float64 `json:"altitude"`
+	Bearing   float64 `json:"bearing"`
+	GForce    float64 `json:"gForce"`
+	HeartRate float64 `json:"heartRate"`
+	Cadence   float64 `json:"cadence"`
+	Temp      float64 `json:"temp"`
+	Distance  float64 `json:"distance"`
+	Grade     float64 `json:"grade"`
 }
 
 type FrontendActivity struct {
@@ -135,9 +140,17 @@ func (a *App) GetActivityDetail(activityID int64) (*strava.ActivityDetail, error
 	return a.stravaClient.GetActivityDetail(activityID)
 }
 
-// GetGPSPointForVideoTime finds the GPS point corresponding to a video's start time
-// Substitua a função GetGPSPointForVideoTime em app.go
+// Helper function to safely extract stream data
+func getStreamData(streams map[string]strava.ActivityStream, key string) []interface{} {
+	if stream, ok := streams[key]; ok {
+		if data, ok := stream.Data.([]interface{}); ok {
+			return data
+		}
+	}
+	return nil
+}
 
+// GetGPSPointForVideoTime finds the GPS point corresponding to a video's start time
 func (a *App) GetGPSPointForVideoTime(activityID int64, videoPath string) (FrontendGPSPoint, error) {
 	if a.stravaClient == nil {
 		return FrontendGPSPoint{}, fmt.Errorf("not authenticated")
@@ -189,10 +202,15 @@ func (a *App) GetGPSPointForVideoTime(activityID int64, videoPath string) (Front
 
 	processor := gps.NewGPSProcessor()
 	err = processor.ProcessStreamData(
-		streams["time"].Data.([]interface{}),
-		streams["latlng"].Data.([]interface{}),
-		streams["velocity_smooth"].Data.([]interface{}),
-		streams["altitude"].Data.([]interface{}),
+		getStreamData(streams, "time"),
+		getStreamData(streams, "latlng"),
+		getStreamData(streams, "velocity_smooth"),
+		getStreamData(streams, "altitude"),
+		getStreamData(streams, "heartrate"),
+		getStreamData(streams, "cadence"),
+		getStreamData(streams, "temp"),
+		getStreamData(streams, "distance"),
+		getStreamData(streams, "grade_smooth"),
 		detail.StartDate,
 	)
 	if err != nil {
@@ -217,13 +235,18 @@ func (a *App) GetGPSPointForVideoTime(activityID int64, videoPath string) (Front
 	fmt.Printf("===========================\n")
 
 	return FrontendGPSPoint{
-		Time:     point.Time.Format(time.RFC3339),
-		Lat:      point.Lat,
-		Lng:      point.Lng,
-		Velocity: point.Velocity,
-		Altitude: point.Altitude,
-		Bearing:  point.Bearing,
-		GForce:   point.GForce,
+		Time:      point.Time.Format(time.RFC3339),
+		Lat:       point.Lat,
+		Lng:       point.Lng,
+		Velocity:  point.Velocity,
+		Altitude:  point.Altitude,
+		Bearing:   point.Bearing,
+		GForce:    point.GForce,
+		HeartRate: point.HeartRate,
+		Cadence:   point.Cadence,
+		Temp:      point.Temp,
+		Distance:  point.Distance,
+		Grade:     point.Grade,
 	}, nil
 }
 
@@ -245,10 +268,15 @@ func (a *App) GetGPSPointForMapClick(activityID int64, lat, lng float64) (Fronte
 	// Re-processa os streams para garantir que o processador esteja populado
 	processor := gps.NewGPSProcessor()
 	err = processor.ProcessStreamData(
-		streams["time"].Data.([]interface{}),
-		streams["latlng"].Data.([]interface{}),
-		streams["velocity_smooth"].Data.([]interface{}),
-		streams["altitude"].Data.([]interface{}),
+		getStreamData(streams, "time"),
+		getStreamData(streams, "latlng"),
+		getStreamData(streams, "velocity_smooth"),
+		getStreamData(streams, "altitude"),
+		getStreamData(streams, "heartrate"),
+		getStreamData(streams, "cadence"),
+		getStreamData(streams, "temp"),
+		getStreamData(streams, "distance"),
+		getStreamData(streams, "grade_smooth"),
 		detail.StartDate,
 	)
 	if err != nil {
@@ -261,13 +289,18 @@ func (a *App) GetGPSPointForMapClick(activityID int64, lat, lng float64) (Fronte
 	}
 
 	return FrontendGPSPoint{
-		Time:     point.Time.Format(time.RFC3339),
-		Lat:      point.Lat,
-		Lng:      point.Lng,
-		Velocity: point.Velocity,
-		Altitude: point.Altitude,
-		Bearing:  point.Bearing,
-		GForce:   point.GForce,
+		Time:      point.Time.Format(time.RFC3339),
+		Lat:       point.Lat,
+		Lng:       point.Lng,
+		Velocity:  point.Velocity,
+		Altitude:  point.Altitude,
+		Bearing:   point.Bearing,
+		GForce:    point.GForce,
+		HeartRate: point.HeartRate,
+		Cadence:   point.Cadence,
+		Temp:      point.Temp,
+		Distance:  point.Distance,
+		Grade:     point.Grade,
 	}, nil
 }
 
@@ -321,8 +354,15 @@ func (a *App) ProcessVideoOverlay(activityID int64, videoPath string, manualStar
 	}
 	processor := gps.NewGPSProcessor()
 	err = processor.ProcessStreamData(
-		streams["time"].Data.([]interface{}), streams["latlng"].Data.([]interface{}),
-		streams["velocity_smooth"].Data.([]interface{}), streams["altitude"].Data.([]interface{}),
+		getStreamData(streams, "time"),
+		getStreamData(streams, "latlng"),
+		getStreamData(streams, "velocity_smooth"),
+		getStreamData(streams, "altitude"),
+		getStreamData(streams, "heartrate"),
+		getStreamData(streams, "cadence"),
+		getStreamData(streams, "temp"),
+		getStreamData(streams, "distance"),
+		getStreamData(streams, "grade_smooth"),
 		detail.StartDate,
 	)
 	if err != nil {
@@ -378,10 +418,15 @@ func (a *App) GetAllGPSPoints(activityID int64) ([]FrontendGPSPoint, error) {
 
 	processor := gps.NewGPSProcessor()
 	err = processor.ProcessStreamData(
-		timeStream.Data.([]interface{}),
-		latlngStream.Data.([]interface{}),
-		streams["velocity_smooth"].Data.([]interface{}),
-		streams["altitude"].Data.([]interface{}),
+		getStreamData(streams, "time"),
+		getStreamData(streams, "latlng"),
+		getStreamData(streams, "velocity_smooth"),
+		getStreamData(streams, "altitude"),
+		getStreamData(streams, "heartrate"),
+		getStreamData(streams, "cadence"),
+		getStreamData(streams, "temp"),
+		getStreamData(streams, "distance"),
+		getStreamData(streams, "grade_smooth"),
 		detail.StartDate,
 	)
 	if err != nil {
@@ -398,13 +443,18 @@ func (a *App) GetAllGPSPoints(activityID int64) ([]FrontendGPSPoint, error) {
 	var frontendPoints []FrontendGPSPoint
 	for _, point := range selectedPoints {
 		frontendPoints = append(frontendPoints, FrontendGPSPoint{
-			Time:     point.Time.Format(time.RFC3339),
-			Lat:      point.Lat,
-			Lng:      point.Lng,
-			Velocity: point.Velocity,
-			Altitude: point.Altitude,
-			Bearing:  point.Bearing,
-			GForce:   point.GForce,
+			Time:      point.Time.Format(time.RFC3339),
+			Lat:       point.Lat,
+			Lng:       point.Lng,
+			Velocity:  point.Velocity,
+			Altitude:  point.Altitude,
+			Bearing:   point.Bearing,
+			GForce:    point.GForce,
+			HeartRate: point.HeartRate,
+			Cadence:   point.Cadence,
+			Temp:      point.Temp,
+			Distance:  point.Distance,
+			Grade:     point.Grade,
 		})
 	}
 
@@ -527,10 +577,15 @@ func (a *App) GetFullGPSTrajectory(activityID int64) ([]FrontendGPSPoint, error)
 
 	processor := gps.NewGPSProcessor()
 	err = processor.ProcessStreamData(
-		streams["time"].Data.([]interface{}),
-		streams["latlng"].Data.([]interface{}),
-		streams["velocity_smooth"].Data.([]interface{}),
-		streams["altitude"].Data.([]interface{}),
+		getStreamData(streams, "time"),
+		getStreamData(streams, "latlng"),
+		getStreamData(streams, "velocity_smooth"),
+		getStreamData(streams, "altitude"),
+		getStreamData(streams, "heartrate"),
+		getStreamData(streams, "cadence"),
+		getStreamData(streams, "temp"),
+		getStreamData(streams, "distance"),
+		getStreamData(streams, "grade_smooth"),
 		detail.StartDate,
 	)
 	if err != nil {
@@ -544,13 +599,18 @@ func (a *App) GetFullGPSTrajectory(activityID int64) ([]FrontendGPSPoint, error)
 	var fullTrajectory []FrontendGPSPoint
 	for _, point := range allPoints {
 		fullTrajectory = append(fullTrajectory, FrontendGPSPoint{
-			Time:     point.Time.Format(time.RFC3339),
-			Lat:      point.Lat,
-			Lng:      point.Lng,
-			Velocity: point.Velocity,
-			Altitude: point.Altitude,
-			Bearing:  point.Bearing,
-			GForce:   point.GForce,
+			Time:      point.Time.Format(time.RFC3339),
+			Lat:       point.Lat,
+			Lng:       point.Lng,
+			Velocity:  point.Velocity,
+			Altitude:  point.Altitude,
+			Bearing:   point.Bearing,
+			GForce:    point.GForce,
+			HeartRate: point.HeartRate,
+			Cadence:   point.Cadence,
+			Temp:      point.Temp,
+			Distance:  point.Distance,
+			Grade:     point.Grade,
 		})
 	}
 
@@ -603,10 +663,15 @@ func (a *App) GetGPSPointsWithDensity(activityID int64, density string) ([]Front
 
 	processor := gps.NewGPSProcessor()
 	err = processor.ProcessStreamData(
-		timeStream.Data.([]interface{}),
-		latlngStream.Data.([]interface{}),
-		streams["velocity_smooth"].Data.([]interface{}),
-		streams["altitude"].Data.([]interface{}),
+		getStreamData(streams, "time"),
+		getStreamData(streams, "latlng"),
+		getStreamData(streams, "velocity_smooth"),
+		getStreamData(streams, "altitude"),
+		getStreamData(streams, "heartrate"),
+		getStreamData(streams, "cadence"),
+		getStreamData(streams, "temp"),
+		getStreamData(streams, "distance"),
+		getStreamData(streams, "grade_smooth"),
 		detail.StartDate,
 	)
 	if err != nil {
@@ -638,13 +703,18 @@ func (a *App) GetGPSPointsWithDensity(activityID int64, density string) ([]Front
 	var frontendPoints []FrontendGPSPoint
 	for _, point := range selectedPoints {
 		frontendPoints = append(frontendPoints, FrontendGPSPoint{
-			Time:     point.Time.Format(time.RFC3339),
-			Lat:      point.Lat,
-			Lng:      point.Lng,
-			Velocity: point.Velocity,
-			Altitude: point.Altitude,
-			Bearing:  point.Bearing,
-			GForce:   point.GForce,
+			Time:      point.Time.Format(time.RFC3339),
+			Lat:       point.Lat,
+			Lng:       point.Lng,
+			Velocity:  point.Velocity,
+			Altitude:  point.Altitude,
+			Bearing:   point.Bearing,
+			GForce:    point.GForce,
+			HeartRate: point.HeartRate,
+			Cadence:   point.Cadence,
+			Temp:      point.Temp,
+			Distance:  point.Distance,
+			Grade:     point.Grade,
 		})
 	}
 

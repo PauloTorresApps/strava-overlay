@@ -107,7 +107,7 @@ func (c *Client) GetActivityDetail(activityID int64) (*ActivityDetail, error) {
 }
 
 func (c *Client) GetActivityStreams(activityID int64) (map[string]ActivityStream, error) {
-	url := fmt.Sprintf("%s/activities/%d/streams?keys=time,latlng,velocity_smooth,altitude&key_by_type=true",
+	url := fmt.Sprintf("%s/activities/%d/streams?keys=time,latlng,velocity_smooth,altitude,heartrate,cadence,temp,distance,grade_smooth&key_by_type=true",
 		c.baseURL, activityID)
 
 	resp, err := c.httpClient.Get(url)

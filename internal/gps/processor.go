@@ -8,13 +8,18 @@ import (
 )
 
 type GPSPoint struct {
-	Time     time.Time
-	Lat      float64
-	Lng      float64
-	Velocity float64
-	Altitude float64
-	Bearing  float64
-	GForce   float64
+	Time      time.Time
+	Lat       float64
+	Lng       float64
+	Velocity  float64
+	Altitude  float64
+	Bearing   float64
+	GForce    float64
+	HeartRate float64
+	Cadence   float64
+	Temp      float64
+	Distance  float64
+	Grade     float64
 }
 
 type GPSProcessor struct {
@@ -25,7 +30,12 @@ func NewGPSProcessor() *GPSProcessor {
 	return &GPSProcessor{}
 }
 
-func (gp *GPSProcessor) ProcessStreamData(timeData, latlngData, velocityData, altitudeData []interface{}, startTime time.Time) error {
+// func (gp *GPSProcessor) ProcessStreamData(timeData, latlngData, velocityData, altitudeData []interface{}, startTime time.Time) error {
+func (gp *GPSProcessor) ProcessStreamData(
+	timeData, latlngData, velocityData, altitudeData, heartrateData,
+	cadenceData, tempData, distanceData, gradeData []interface{},
+	startTime time.Time,
+) error {
 	if len(timeData) != len(latlngData) {
 		return fmt.Errorf("data length mismatch: time=%d, latlng=%d", len(timeData), len(latlngData))
 	}
@@ -69,6 +79,36 @@ func (gp *GPSProcessor) ProcessStreamData(timeData, latlngData, velocityData, al
 		if altitudeData != nil && i < len(altitudeData) && altitudeData[i] != nil {
 			if alt, ok := altitudeData[i].(float64); ok && !math.IsNaN(alt) {
 				point.Altitude = alt
+			}
+		}
+
+		if heartrateData != nil && i < len(heartrateData) && heartrateData[i] != nil {
+			if hr, ok := heartrateData[i].(float64); ok && !math.IsNaN(hr) {
+				point.HeartRate = hr
+			}
+		}
+
+		if cadenceData != nil && i < len(cadenceData) && cadenceData[i] != nil {
+			if cad, ok := cadenceData[i].(float64); ok && !math.IsNaN(cad) {
+				point.Cadence = cad
+			}
+		}
+
+		if tempData != nil && i < len(tempData) && tempData[i] != nil {
+			if temp, ok := tempData[i].(float64); ok && !math.IsNaN(temp) {
+				point.Temp = temp
+			}
+		}
+
+		if distanceData != nil && i < len(distanceData) && distanceData[i] != nil {
+			if dist, ok := distanceData[i].(float64); ok && !math.IsNaN(dist) {
+				point.Distance = dist
+			}
+		}
+
+		if gradeData != nil && i < len(gradeData) && gradeData[i] != nil {
+			if grade, ok := gradeData[i].(float64); ok && !math.IsNaN(grade) {
+				point.Grade = grade
 			}
 		}
 
@@ -120,19 +160,29 @@ func (gp *GPSProcessor) interpolatePoints(points []GPSPoint) []GPSPoint {
 				lng := p1.Lng + ratio*(p2.Lng-p1.Lng)
 				altitude := p1.Altitude + ratio*(p2.Altitude-p1.Altitude)
 				velocity := p1.Velocity + ratio*(p2.Velocity-p1.Velocity)
+				heartrate := p1.HeartRate + ratio*(p2.HeartRate-p1.HeartRate)
+				cadence := p1.Cadence + ratio*(p2.Cadence-p1.Cadence)
+				temp := p1.Temp + ratio*(p2.Temp-p1.Temp)
+				distance := p1.Distance + ratio*(p2.Distance-p1.Distance)
+				grade := p1.Grade + ratio*(p2.Grade-p1.Grade)
 
 				// Para Bearing e GForce, usamos o valor do ponto anterior para simplicidade
 				bearing := p1.Bearing
 				gForce := p1.GForce
 
 				newPoint := GPSPoint{
-					Time:     t1.Add(t),
-					Lat:      lat,
-					Lng:      lng,
-					Altitude: altitude,
-					Velocity: velocity,
-					Bearing:  bearing,
-					GForce:   gForce,
+					Time:      t1.Add(t),
+					Lat:       lat,
+					Lng:       lng,
+					Altitude:  altitude,
+					Velocity:  velocity,
+					Bearing:   bearing,
+					GForce:    gForce,
+					HeartRate: heartrate,
+					Cadence:   cadence,
+					Temp:      temp,
+					Distance:  distance,
+					Grade:     grade,
 				}
 				interpolated = append(interpolated, newPoint)
 			}

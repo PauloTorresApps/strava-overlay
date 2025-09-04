@@ -56,6 +56,11 @@ export namespace main {
 	    altitude: number;
 	    bearing: number;
 	    gForce: number;
+	    heartRate: number;
+	    cadence: number;
+	    temp: number;
+	    distance: number;
+	    grade: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new FrontendGPSPoint(source);
@@ -70,6 +75,11 @@ export namespace main {
 	        this.altitude = source["altitude"];
 	        this.bearing = source["bearing"];
 	        this.gForce = source["gForce"];
+	        this.heartRate = source["heartRate"];
+	        this.cadence = source["cadence"];
+	        this.temp = source["temp"];
+	        this.distance = source["distance"];
+	        this.grade = source["grade"];
 	    }
 	}
 
