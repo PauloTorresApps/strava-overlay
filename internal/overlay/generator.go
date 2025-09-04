@@ -204,24 +204,11 @@ func (g *Generator) drawDataCircle(dc *gg.Context, cx, cy, radius float64, borde
 	dc.DrawStringAnchored(unit, cx, cy+25, 0.5, 0.5)
 }
 
-// interpolateColor calcula a cor intermediária entre duas cores.
-func interpolateColor(t float64, c1, c2 color.Color) color.Color {
-	r1, g1, b1, a1 := c1.RGBA()
-	r2, g2, b2, a2 := c2.RGBA()
-
-	return color.RGBA{
-		R: uint8((float64(r1>>8)*(1-t) + float64(r2>>8)*t)),
-		G: uint8((float64(g1>>8)*(1-t) + float64(g2>>8)*t)),
-		B: uint8((float64(b1>>8)*(1-t) + float64(b2>>8)*t)),
-		A: uint8((float64(a1>>8)*(1-t) + float64(a2>>8)*t)),
-	}
-}
-
-// drawSpeedometer desenha o arco do velocímetro com um visual moderno e gradiente suave.
+// drawSpeedometer desenha o arco do velocímetro e as marcações (versão original, grande).
 func (g *Generator) drawSpeedometer(dc *gg.Context, cx, cy float64, speed, maxSpeed float64) {
 	radius := 85.0
 	lineWidth := 18.0
-	progressWidth := 12.0 // Um pouco mais fino para dar espaço ao brilho
+	progressWidth := 16.0
 	fontSize := 12.0
 	textOffset := 20.0
 
@@ -229,95 +216,30 @@ func (g *Generator) drawSpeedometer(dc *gg.Context, cx, cy float64, speed, maxSp
 	totalArc := gg.Radians(270)
 	g.loadFont(dc, fontSize)
 
-	// 1. Círculo de fundo
+	// Círculo de fundo
 	dc.SetLineWidth(lineWidth)
 	dc.SetRGBA(0.1, 0.1, 0.1, 0.6)
-	dc.DrawArc(cx, cy, radius, startAngle, startAngle+totalArc)
+	dc.DrawCircle(cx, cy, radius)
 	dc.Stroke()
 
-	// 2. Borda de Progresso com Gradiente Suave
+	// Arco de progresso
+	dc.SetLineWidth(progressWidth)
 	progress := speed / maxSpeed
 	if progress > 1 {
 		progress = 1
 	}
-	if progress < 0 {
-		progress = 0
-	}
-	currentAngle := startAngle + (totalArc * progress)
+	progressAngle := startAngle + (totalArc * progress)
+	gradient := gg.NewLinearGradient(cx-radius, cy, cx+radius, cy)
+	gradient.AddColorStop(0, color.RGBA{R: 60, G: 220, B: 60, A: 220})
+	gradient.AddColorStop(0.7, color.RGBA{R: 255, G: 200, B: 0, A: 220})
+	gradient.AddColorStop(1, color.RGBA{R: 220, G: 30, B: 30, A: 220})
+	dc.SetStrokeStyle(gradient)
+	dc.DrawArc(cx, cy, radius, startAngle, progressAngle)
+	dc.Stroke()
 
-	// Cores e Zonas
-	colorGreen := color.RGBA{R: 0, G: 255, B: 127, A: 255}
-	colorYellow := color.RGBA{R: 255, G: 215, B: 0, A: 255}
-	colorRed := color.RGBA{R: 255, G: 69, B: 0, A: 255}
-
-	// Pontos de transição do gradiente (0.0 a 1.0 do progresso total)
-	greenEndProgress := 0.5
-	yellowEndProgress := 0.8
-
-	if progress > 0.001 {
-		numSegments := int(math.Ceil(270 * progress)) // ~1 segmento por grau de progresso
-		if numSegments < 2 {
-			numSegments = 2
-		}
-
-		angleStep := (currentAngle - startAngle) / float64(numSegments)
-
-		for i := 0; i < numSegments; i++ {
-			segmentStart := startAngle + (float64(i) * angleStep)
-			segmentEnd := segmentStart + angleStep
-
-			// Calcula o progresso no meio do segmento para definir a cor
-			segmentProgress := (float64(i) + 0.5) / float64(numSegments)
-
-			var segmentColor color.Color
-			if segmentProgress < greenEndProgress {
-				t := segmentProgress / greenEndProgress
-				segmentColor = interpolateColor(t, colorGreen, colorYellow)
-			} else if segmentProgress < yellowEndProgress {
-				t := (segmentProgress - greenEndProgress) / (yellowEndProgress - greenEndProgress)
-				segmentColor = interpolateColor(t, colorYellow, colorRed)
-			} else {
-				segmentColor = colorRed
-			}
-
-			// Desenha o segmento com brilho
-			dc.SetLineCap(gg.LineCapRound)
-			r, g, b, _ := segmentColor.RGBA()
-
-			// Efeito de brilho
-			dc.SetRGBA255(int(r>>8), int(g>>8), int(b>>8), 80)
-			dc.SetLineWidth(progressWidth + 6)
-			dc.DrawArc(cx, cy, radius, segmentStart, segmentEnd)
-			dc.Stroke()
-
-			// Arco principal
-			dc.SetColor(segmentColor)
-			dc.SetLineWidth(progressWidth)
-			dc.DrawArc(cx, cy, radius, segmentStart, segmentEnd)
-			dc.Stroke()
-		}
-	}
-
-	// 3. "Ponteiro" moderno no final do arco
-	if progress > 0.001 {
-		pointerX := cx + radius*math.Cos(currentAngle)
-		pointerY := cy + radius*math.Sin(currentAngle)
-
-		// Sombra suave para o ponteiro
-		dc.SetRGBA(0, 0, 0, 0.5)
-		dc.DrawCircle(pointerX+1, pointerY+1, progressWidth/2+1)
-		dc.Fill()
-
-		// Base do ponteiro
-		dc.SetRGBA(1, 1, 1, 0.9)
-		dc.DrawCircle(pointerX, pointerY, progressWidth/2)
-		dc.Fill()
-	}
-
-	// 4. Marcadores e números
+	// Marcadores e números
 	dc.SetLineWidth(2)
 	dc.SetRGBA(1, 1, 1, 0.9)
-	dc.SetLineCap(gg.LineCapButt) // Reseta a terminação da linha para os marcadores
 	for i := 0.0; i <= maxSpeed; i += 10 {
 		angle := startAngle + (totalArc * (i / maxSpeed))
 		if i/maxSpeed <= 1.0 {
