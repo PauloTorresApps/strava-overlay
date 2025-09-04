@@ -230,9 +230,11 @@ func (g *Generator) drawSpeedometer(dc *gg.Context, cx, cy float64, speed, maxSp
 	}
 	progressAngle := startAngle + (totalArc * progress)
 	gradient := gg.NewLinearGradient(cx-radius, cy, cx+radius, cy)
-	gradient.AddColorStop(0, color.RGBA{R: 0, G: 180, B: 255, A: 220})
-	gradient.AddColorStop(0.7, color.RGBA{R: 255, G: 200, B: 0, A: 220})
-	gradient.AddColorStop(1, color.RGBA{R: 220, G: 30, B: 30, A: 220})
+	// --- MODIFICAÇÃO: Ajuste de cores do gradiente do velocímetro ---
+	gradient.AddColorStop(0, color.RGBA{R: 60, G: 220, B: 60, A: 220})   // Verde para velocidades baixas
+	gradient.AddColorStop(0.7, color.RGBA{R: 255, G: 200, B: 0, A: 220}) // Amarelo para velocidades médias
+	gradient.AddColorStop(1, color.RGBA{R: 220, G: 30, B: 30, A: 220})   // Vermelho para velocidades altas
+	// -----------------------------------------------------------------
 	dc.SetStrokeStyle(gradient)
 	dc.DrawArc(cx, cy, radius, startAngle, progressAngle)
 	dc.Stroke()
