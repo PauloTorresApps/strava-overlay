@@ -52,10 +52,8 @@ func NewGenerator() *Generator {
 	}
 
 	return &Generator{
-		// --- MODIFICAÇÃO: Dimensões otimizadas para novo layout ---
-		width:  480, // Largura aumentada para acomodar mais dados
-		height: 220, // Altura ajustada
-		// -----------------------------------------------------------
+		width:      820, // Aumentado para acomodar 1 velocímetro grande + 6 círculos em linha
+		height:     190, // Altura reduzida para alinhar na base
 		tempDir:    tempDir,
 		fontLoaded: false,
 		fontPath:   fontPath,
@@ -107,7 +105,7 @@ func (g *Generator) GenerateOverlaySequence(points []gps.GPSPoint, frameRate flo
 	var imagePaths []string
 	for i, point := range points {
 		imagePath := filepath.Join(g.tempDir, fmt.Sprintf("overlay_%06d.png", i))
-		err := g.generateDataDashboard(point, maxSpeedScale, imagePath)
+		err := g.generateHybridDashboard(point, maxSpeedScale, imagePath)
 		if err != nil {
 			g.Cleanup()
 			return nil, fmt.Errorf("erro ao gerar o frame de overlay %d: %w", i, err)
@@ -117,94 +115,96 @@ func (g *Generator) GenerateOverlaySequence(points []gps.GPSPoint, frameRate flo
 	return imagePaths, nil
 }
 
-// generateDataDashboard cria um painel com todos os elementos de dados.
-func (g *Generator) generateDataDashboard(point gps.GPSPoint, maxSpeed float64, outputPath string) error {
+// generateHybridDashboard cria o layout com o velocímetro grande à esquerda e círculos de dados à direita.
+func (g *Generator) generateHybridDashboard(point gps.GPSPoint, maxSpeed float64, outputPath string) error {
 	dc := gg.NewContext(g.width, g.height)
 	dc.SetRGBA(0, 0, 0, 0) // Fundo transparente
 	dc.Clear()
 
-	// Layout: Velocímetro à esquerda, painéis de dados à direita
-	speedometerCX := float64(g.height) / 2.0
-	speedometerCY := float64(g.height) / 2.0
-	dataPanelX := speedometerCX*2 + 15
+	// Definir uma linha de base inferior comum com margem para alinhar todos os elementos por baixo
+	bottomPadding := 10.0
+	bottomY := float64(g.height) - bottomPadding
 
-	// --- Desenho dos Componentes ---
+	// 1. Desenha o Velocímetro Grande à Esquerda
+	speedometerRadius := 85.0
+	speedometerCX := speedometerRadius + 10 // Posição X com uma pequena margem
+	// Alinhar o centro Y para que a base do velocímetro toque a linha de base
+	speedometerCY := bottomY - speedometerRadius
 	g.drawSpeedometer(dc, speedometerCX, speedometerCY, point.Velocity*3.6, maxSpeed)
 	g.drawCompass(dc, speedometerCX, speedometerCY, point.Bearing)
 	g.drawDigitalSpeed(dc, speedometerCX, speedometerCY+60, point.Velocity*3.6)
 
-	// Painéis de dados
-	panelY := 28.0
-	panelSpacing := 50.0
+	// 2. Desenha os Círculos de Dados à Direita em uma única linha
+	circleRadius := 40.0 // Raio diminuído em 5px
+	spacing := 15.0
+	// Começa a desenhar os círculos após o velocímetro grande
+	startX := (speedometerCX + speedometerRadius) + spacing + circleRadius
+	currentX := startX
+	// Alinhar o centro Y dos círculos para que suas bases toquem a linha de base
+	startY := bottomY - circleRadius
 
-	// Linha 1
-	g.drawDataPanel(dc, dataPanelX, panelY, "❤️", "BPM", fmt.Sprintf("%.0f", point.HeartRate), point.HeartRate > 0, color.RGBA{220, 40, 80, 255})
-	g.drawDataPanel(dc, dataPanelX+120, panelY, "👟", "RPM", fmt.Sprintf("%.0f", point.Cadence), point.Cadence > 0, color.RGBA{0, 200, 255, 255})
-	// Linha 2
-	panelY += panelSpacing
-	g.drawDataPanel(dc, dataPanelX, panelY, "G", "Força-G", fmt.Sprintf("%.2f", point.GForce), true, color.RGBA{255, 180, 0, 255})
-	g.drawDataPanel(dc, dataPanelX+120, panelY, "📐", "% Incl.", fmt.Sprintf("%.1f", point.Grade), true, color.RGBA{200, 200, 200, 255})
-	// Linha 3
-	panelY += panelSpacing
-	g.drawDataPanel(dc, dataPanelX, panelY, "⛰️", "Altitude", fmt.Sprintf("%.0f m", point.Altitude), true, color.RGBA{140, 90, 255, 255})
-	g.drawDataPanel(dc, dataPanelX+120, panelY, "🌡️", "Temp.", fmt.Sprintf("%.0f°", point.Temp), point.Temp != 0, color.RGBA{255, 100, 0, 255})
-	// Linha 4 - Distância
-	panelY += panelSpacing
-	g.drawDistancePanel(dc, dataPanelX, panelY, "📏", "Distância", fmt.Sprintf("%.2f km", point.Distance/1000), point.Distance > 0)
+	// Desenha todos os círculos de dados em uma linha
+	g.drawDataCircle(dc, currentX, startY, circleRadius, color.RGBA{220, 40, 80, 255}, "Frequência", "BPM", fmt.Sprintf("%.0f", point.HeartRate), point.HeartRate > 0)
+	currentX += (circleRadius * 2) + spacing
+	g.drawDataCircle(dc, currentX, startY, circleRadius, color.RGBA{0, 200, 255, 255}, "Cadência", "RPM", fmt.Sprintf("%.0f", point.Cadence), point.Cadence > 0)
+	currentX += (circleRadius * 2) + spacing
+	g.drawDataCircle(dc, currentX, startY, circleRadius, color.RGBA{200, 200, 200, 255}, "Inclinação", "%", fmt.Sprintf("%.1f", point.Grade), true)
+	currentX += (circleRadius * 2) + spacing
+	g.drawDataCircle(dc, currentX, startY, circleRadius, color.RGBA{140, 90, 255, 255}, "Altitude", "m", fmt.Sprintf("%.0f", point.Altitude), true)
+	currentX += (circleRadius * 2) + spacing
+	g.drawDataCircle(dc, currentX, startY, circleRadius, color.RGBA{255, 180, 0, 255}, "Força-G", "g", fmt.Sprintf("%.2f", point.GForce), true)
+	currentX += (circleRadius * 2) + spacing
+	g.drawDataCircle(dc, currentX, startY, circleRadius, color.RGBA{60, 220, 60, 255}, "Distância", "km", fmt.Sprintf("%.2f", point.Distance/1000), point.Distance > 0)
 
 	return dc.SavePNG(outputPath)
 }
 
-// drawDataPanel desenha um widget de dados genérico.
-func (g *Generator) drawDataPanel(dc *gg.Context, x, y float64, icon, label, value string, available bool, iconColor color.Color) {
+// drawDataCircle desenha um widget de dados circular genérico.
+func (g *Generator) drawDataCircle(dc *gg.Context, cx, cy, radius float64, borderColor color.Color, label, unit, value string, available bool) {
+	// Fundo do círculo
+	dc.SetRGBA(0.1, 0.1, 0.1, 0.5)
+	dc.DrawCircle(cx, cy, radius)
+	dc.Fill()
+
+	// Borda colorida
+	dc.SetColor(borderColor)
+	dc.SetLineWidth(2.5)
+	dc.DrawCircle(cx, cy, radius)
+	dc.Stroke()
+
 	if !available {
 		value = "- -"
-		dc.SetRGBA(1, 1, 1, 0.4) // Cor esmaecida se não estiver disponível
-	} else {
-		dc.SetRGBA(1, 1, 1, 0.9)
 	}
 
-	// Ícone
-	g.loadFont(dc, 20)
-	dc.SetColor(iconColor)
-	dc.DrawString(icon, x, y)
-
-	// Valor
-	g.loadFont(dc, 24)
-	dc.SetRGBA(1, 1, 1, 0.9)
-	dc.DrawString(value, x+32, y)
-
-	// Rótulo
+	// Rótulo (ex: "Cadência")
 	g.loadFont(dc, 12)
-	dc.SetRGBA(1, 1, 1, 0.7)
-	dc.DrawString(label, x+32, y+14)
-}
-
-// drawDistancePanel é um painel maior para a distância.
-func (g *Generator) drawDistancePanel(dc *gg.Context, x, y float64, icon, label, value string, available bool) {
-	if !available {
-		value = "- -"
+	if available {
+		dc.SetRGBA(1, 1, 1, 0.7)
+	} else {
 		dc.SetRGBA(1, 1, 1, 0.4)
-	} else {
-		dc.SetRGBA(1, 1, 1, 0.9)
 	}
-	// Ícone
-	g.loadFont(dc, 20)
-	dc.SetRGB(0.8, 0.8, 0.8)
-	dc.DrawString(icon, x, y)
+	dc.DrawStringAnchored(label, cx, cy-18, 0.5, 0.5)
 
-	// Valor
-	g.loadFont(dc, 24)
-	dc.SetRGBA(1, 1, 1, 0.9)
-	dc.DrawString(value, x+32, y)
+	// Valor (ex: "90")
+	g.loadFont(dc, 26)
+	if available {
+		dc.SetRGBA(1, 1, 1, 0.95)
+	} else {
+		dc.SetRGBA(1, 1, 1, 0.4)
+	}
+	dc.DrawStringAnchored(value, cx, cy+4, 0.5, 0.5)
 
-	// Rótulo
-	g.loadFont(dc, 12)
-	dc.SetRGBA(1, 1, 1, 0.7)
-	dc.DrawString(label, x+32, y+14)
+	// Unidade (ex: "RPM")
+	g.loadFont(dc, 11)
+	if available {
+		dc.SetRGBA(1, 1, 1, 0.6)
+	} else {
+		dc.SetRGBA(1, 1, 1, 0.4)
+	}
+	dc.DrawStringAnchored(unit, cx, cy+25, 0.5, 0.5)
 }
 
-// drawSpeedometer desenha o arco do velocímetro e as marcações.
+// drawSpeedometer desenha o arco do velocímetro e as marcações (versão original, grande).
 func (g *Generator) drawSpeedometer(dc *gg.Context, cx, cy float64, speed, maxSpeed float64) {
 	radius := 85.0
 	lineWidth := 18.0
@@ -230,11 +230,9 @@ func (g *Generator) drawSpeedometer(dc *gg.Context, cx, cy float64, speed, maxSp
 	}
 	progressAngle := startAngle + (totalArc * progress)
 	gradient := gg.NewLinearGradient(cx-radius, cy, cx+radius, cy)
-	// --- MODIFICAÇÃO: Ajuste de cores do gradiente do velocímetro ---
-	gradient.AddColorStop(0, color.RGBA{R: 60, G: 220, B: 60, A: 220})   // Verde para velocidades baixas
-	gradient.AddColorStop(0.7, color.RGBA{R: 255, G: 200, B: 0, A: 220}) // Amarelo para velocidades médias
-	gradient.AddColorStop(1, color.RGBA{R: 220, G: 30, B: 30, A: 220})   // Vermelho para velocidades altas
-	// -----------------------------------------------------------------
+	gradient.AddColorStop(0, color.RGBA{R: 60, G: 220, B: 60, A: 220})
+	gradient.AddColorStop(0.7, color.RGBA{R: 255, G: 200, B: 0, A: 220})
+	gradient.AddColorStop(1, color.RGBA{R: 220, G: 30, B: 30, A: 220})
 	dc.SetStrokeStyle(gradient)
 	dc.DrawArc(cx, cy, radius, startAngle, progressAngle)
 	dc.Stroke()
@@ -261,7 +259,7 @@ func (g *Generator) drawSpeedometer(dc *gg.Context, cx, cy float64, speed, maxSp
 	}
 }
 
-// drawCompass desenha a bússola no centro do velocímetro.
+// drawCompass desenha a bússola no centro do velocímetro (versão original).
 func (g *Generator) drawCompass(dc *gg.Context, cx, cy float64, bearing float64) {
 	radius := 40.0
 	fontSize := 11.0
@@ -292,7 +290,7 @@ func (g *Generator) drawCompass(dc *gg.Context, cx, cy float64, bearing float64)
 	dc.Translate(cx, cy)
 	dc.Rotate(gg.Radians(bearing))
 
-	// Ponteiro da bússola ajustado
+	// Ponteiro da bússola
 	dc.SetRGBA(1, 0.2, 0.2, 1)
 	dc.MoveTo(0, -radius+8)
 	dc.LineTo(-7, 0)
@@ -310,7 +308,7 @@ func (g *Generator) drawCompass(dc *gg.Context, cx, cy float64, bearing float64)
 	dc.Pop()
 }
 
-// drawDigitalSpeed desenha o valor numérico da velocidade na parte inferior.
+// drawDigitalSpeed desenha o valor numérico da velocidade (versão original).
 func (g *Generator) drawDigitalSpeed(dc *gg.Context, cx, cy float64, speed float64) {
 	g.loadFont(dc, 26)
 	dc.SetRGB255(255, 255, 255)
