@@ -57,9 +57,67 @@ func NewClient(token *oauth2.Token) *Client {
 	}
 }
 
+// GetActivitiesPage busca uma página específica de atividades
+func (c *Client) GetActivitiesPage(page, perPage int) ([]Activity, error) {
+	// Validação dos parâmetros
+	if perPage > 30 {
+		perPage = 30 // Strava limita a 30 por página
+	}
+	if perPage < 1 {
+		perPage = 1
+	}
+	if page < 1 {
+		page = 1
+	}
+
+	url := fmt.Sprintf("%s/athlete/activities?page=%d&per_page=%d", c.baseURL, page, perPage)
+
+	resp, err := c.httpClient.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao fazer requisição: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("resposta HTTP inválida: %d", resp.StatusCode)
+	}
+
+	var activities []Activity
+	if err := json.NewDecoder(resp.Body).Decode(&activities); err != nil {
+		return nil, fmt.Errorf("erro ao decodificar resposta: %w", err)
+	}
+
+	return activities, nil
+}
+
+// GetAllActivities busca todas as atividades disponíveis (com limite para evitar sobrecarga)
+func (c *Client) GetAllActivities(maxPages int) ([]Activity, error) {
+	var allActivities []Activity
+
+	if maxPages <= 0 {
+		maxPages = 10 // Limite padrão de 10 páginas (300 atividades)
+	}
+
+	for page := 1; page <= maxPages; page++ {
+		pageActivities, err := c.GetActivitiesPage(page, 30)
+		if err != nil {
+			return allActivities, fmt.Errorf("erro ao buscar página %d: %w", page, err)
+		}
+
+		allActivities = append(allActivities, pageActivities...)
+
+		// Se recebeu menos que 30 atividades, não há mais páginas
+		if len(pageActivities) < 30 {
+			break
+		}
+	}
+
+	return allActivities, nil
+}
+
+// GetActivities - mantida para compatibilidade, busca primeira página
 func (c *Client) GetActivities() ([]Activity, error) {
 	page := 1
-	// CORREÇÃO: Ajustado para 30 itens por página, conforme exigência do Strava.
 	perPage := 30
 
 	url := fmt.Sprintf("%s/athlete/activities?page=%d&per_page=%d", c.baseURL, page, perPage)
@@ -75,18 +133,8 @@ func (c *Client) GetActivities() ([]Activity, error) {
 		return nil, err
 	}
 
-	gpsActivities := make([]Activity, 0)
-	for _, activity := range pageActivities {
-		if activity.Map.SummaryPolyline != "" {
-			gpsActivities = append(gpsActivities, activity)
-		}
-		// Para quando encontrarmos as 10 primeiras atividades com GPS
-		if len(gpsActivities) >= 10 {
-			break
-		}
-	}
-
-	return gpsActivities, nil
+	// Retorna todas as atividades da primeira página
+	return pageActivities, nil
 }
 
 func (c *Client) GetActivityDetail(activityID int64) (*ActivityDetail, error) {

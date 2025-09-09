@@ -36,7 +36,7 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* --- NOVOS ESTILOS PARA AUTENTICAÇÃO AUTOMÁTICA --- */
+        /* --- ESTILOS PARA AUTENTICAÇÃO AUTOMÁTICA --- */
         .auth-section {
             position: relative;
             transition: all 0.3s ease;
@@ -117,6 +117,129 @@
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
+
+        /* --- ESTILOS PARA PAGINAÇÃO --- */
+        .activities-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .activities-info {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            color: #8b949e;
+            font-size: 0.9rem;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            align-items: center;
+        }
+
+        .filter-controls label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #c9d1d9;
+            font-size: 0.9rem;
+        }
+
+        .filter-controls input[type="checkbox"] {
+            accent-color: #58a6ff;
+        }
+
+        .pagination-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: rgba(33, 38, 45, 0.5);
+            border-radius: 6px;
+        }
+
+        .pagination-btn {
+            background: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .pagination-btn:hover:not(:disabled) {
+            background: #30363d;
+            border-color: #58a6ff;
+        }
+
+        .pagination-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination-info {
+            color: #c9d1d9;
+            font-size: 0.9rem;
+        }
+
+        .load-more-btn {
+            width: 100%;
+            padding: 1rem;
+            background: #238636;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: background 0.2s;
+            margin-top: 1rem;
+        }
+
+        .load-more-btn:hover:not(:disabled) {
+            background: #2ea043;
+        }
+
+        .load-more-btn:disabled {
+            background: #484f58;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .loading-more {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .activity-card.no-gps {
+            opacity: 0.7;
+            border-style: dashed;
+        }
+
+        .activity-card .gps-badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            background: #238636;
+            color: white;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 500;
+            margin-left: 0.5rem;
+        }
+
+        .activity-card .no-gps-badge {
+            background: #484f58;
+        }
         /* ------------------------------------------------- */
     </style>
 </head>
@@ -126,7 +249,7 @@
             <h1>🚴‍♂️ Strava Add Overlay 🏃</h1>
             <p>Adicione overlays de dados GPS aos seus vídeos</p>
             
-            <!-- --- NOVA SEÇÃO: Status de Conexão --- -->
+            <!-- --- Status de Conexão --- -->
             <div class="connection-status">
                 <div id="statusIndicator" class="status-indicator checking"></div>
                 <span id="connectionText">Verificando conexão com Strava...</span>
@@ -135,11 +258,11 @@
         </header>
 
         <main class="container">
-            <!-- Seção de Autenticação MODIFICADA -->
+            <!-- Seção de Autenticação -->
             <section id="authSection" class="auth-section">
                 <h2>Conectar ao Strava</h2>
                 
-                <!-- --- NOVA: Informação sobre conexão automática --- -->
+                <!-- --- Informação sobre conexão automática --- -->
                 <div id="autoConnectInfo" class="auto-connect-info">
                     <h4>🔄 Conexão Automática</h4>
                     <p>A aplicação tentará se conectar automaticamente ao Strava usando suas credenciais salvas. 
@@ -150,7 +273,7 @@
                 <button id="authBtn" class="btn-primary" style="display: none;">Autenticar com Strava</button>
                 <div id="authStatus"></div>
                 
-                <!-- --- NOVA: Loading de verificação --- -->
+                <!-- --- Loading de verificação --- -->
                 <div id="authLoading" class="auth-loading">
                     <div class="spinner"></div>
                     <span>Verificando credenciais salvas...</span>
@@ -158,10 +281,40 @@
                 <!-- ------------------------------------ -->
             </section>
 
-            <!-- Lista de Atividades -->
+            <!-- Lista de Atividades com Paginação -->
             <section id="activitiesSection" class="activities-section hidden">
-                <h2>Suas Atividades com GPS</h2>
+                <div class="activities-header">
+                    <h2>Suas Atividades</h2>
+                    <div class="activities-info">
+                        <span id="totalActivities">0 atividades carregadas</span>
+                        <span id="gpsActivities">0 com GPS</span>
+                    </div>
+                </div>
+                
+                <!-- Filtros -->
+                <div class="filter-controls">
+                    <label>
+                        <input type="checkbox" id="filterGPS" checked>
+                        Mostrar apenas atividades com GPS
+                    </label>
+                </div>
+                
+                <!-- Grid de Atividades -->
                 <div id="activitiesGrid" class="activities-grid"></div>
+                
+                <!-- Controles de Paginação -->
+                <div id="paginationControls" class="pagination-controls" style="display: none;">
+                    <button id="prevPageBtn" class="pagination-btn" disabled>← Anterior</button>
+                    <span class="pagination-info">
+                        Página <span id="currentPage">1</span>
+                    </span>
+                    <button id="nextPageBtn" class="pagination-btn">Próxima →</button>
+                </div>
+                
+                <!-- Botão Carregar Mais -->
+                <button id="loadMoreBtn" class="load-more-btn" style="display: none;">
+                    <span id="loadMoreText">Carregar Mais Atividades</span>
+                </button>
             </section>
 
             <!-- Detalhes da Atividade -->
@@ -211,9 +364,6 @@
             }
             return tile;
         };
-        
-        // REMOVIDA A DEFINIÇÃO DUPLICADA DE updateConnectionStatus
-        // A função agora está definida apenas no main.js
     </script>
     <script src="main.js"></script>
 </body>

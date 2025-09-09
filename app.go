@@ -34,7 +34,7 @@ type AuthStatus struct {
 	Error           string `json:"error,omitempty"`
 }
 
-// --- ESTRUTURAS PARA O FRONTEND (mantidas iguais) ---
+// --- ESTRUTURAS PARA O FRONTEND ---
 type FrontendGPSPoint struct {
 	Time     string  `json:"time"`
 	Lat      float64 `json:"lat"`
@@ -56,12 +56,22 @@ type FrontendActivity struct {
 	StartLatLng []float64  `json:"start_latlng"`
 	EndLatLng   []float64  `json:"end_latlng"`
 	Map         strava.Map `json:"map"`
+	HasGPS      bool       `json:"has_gps"` // Nova propriedade para indicar se tem GPS
 }
 
 type FrontendActivityDetail struct {
 	*FrontendActivity
 	Calories      float64 `json:"calories"`
 	ElevationGain float64 `json:"total_elevation_gain"`
+}
+
+// NOVA ESTRUTURA: Resposta paginada de atividades
+type PaginatedActivities struct {
+	Activities  []FrontendActivity `json:"activities"`
+	Page        int                `json:"page"`
+	PerPage     int                `json:"per_page"`
+	HasMore     bool               `json:"has_more"`
+	TotalLoaded int                `json:"total_loaded"`
 }
 
 // NewApp creates a new App application struct
@@ -84,7 +94,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-// NOVA FUNÇÃO: Verifica automaticamente se há um token válido
+// CheckAuthenticationStatus verifica automaticamente se há um token válido
 func (a *App) CheckAuthenticationStatus() AuthStatus {
 	log.Printf("🔍 Verificando status de autenticação...")
 
@@ -129,34 +139,67 @@ func (a *App) AuthenticateStrava() error {
 	return nil
 }
 
-// GetActivities retrieves user activities and converts them for the frontend
-func (a *App) GetActivities() ([]FrontendActivity, error) {
+// NOVA FUNÇÃO: GetActivitiesPage retorna uma página de atividades
+func (a *App) GetActivitiesPage(page int) (*PaginatedActivities, error) {
 	if a.stravaClient == nil {
 		return nil, fmt.Errorf("not authenticated")
 	}
 
-	activities, err := a.stravaClient.GetActivities()
+	perPage := 30 // Máximo permitido pelo Strava
+	log.Printf("📋 Carregando página %d de atividades (até %d itens)...", page, perPage)
+
+	activities, err := a.stravaClient.GetActivitiesPage(page, perPage)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("erro ao buscar atividades: %w", err)
 	}
 
-	// Converte a lista de atividades para a versão do frontend
+	// Converte para o formato do frontend
 	frontendActivities := make([]FrontendActivity, len(activities))
+	gpsCount := 0
+
 	for i, act := range activities {
+		hasGPS := act.Map.SummaryPolyline != ""
+		if hasGPS {
+			gpsCount++
+		}
+
 		frontendActivities[i] = FrontendActivity{
 			ID:          act.ID,
 			Name:        act.Name,
 			Type:        act.Type,
-			StartDate:   act.StartDate.Format(time.RFC3339), // Converte time.Time para string
+			StartDate:   act.StartDate.Format(time.RFC3339),
 			Distance:    act.Distance,
 			MovingTime:  act.MovingTime,
 			MaxSpeed:    act.MaxSpeed,
 			StartLatLng: act.StartLatLng,
 			EndLatLng:   act.EndLatLng,
 			Map:         act.Map,
+			HasGPS:      hasGPS,
 		}
 	}
-	return frontendActivities, nil
+
+	// Determina se há mais páginas (se retornou o máximo de itens, provavelmente há mais)
+	hasMore := len(activities) == perPage
+	totalLoaded := (page-1)*perPage + len(activities)
+
+	log.Printf("✅ Página %d carregada: %d atividades (%d com GPS)", page, len(activities), gpsCount)
+
+	return &PaginatedActivities{
+		Activities:  frontendActivities,
+		Page:        page,
+		PerPage:     perPage,
+		HasMore:     hasMore,
+		TotalLoaded: totalLoaded,
+	}, nil
+}
+
+// GetActivities - MANTIDA PARA COMPATIBILIDADE, mas recomenda-se usar GetActivitiesPage
+func (a *App) GetActivities() ([]FrontendActivity, error) {
+	result, err := a.GetActivitiesPage(1)
+	if err != nil {
+		return nil, err
+	}
+	return result.Activities, nil
 }
 
 // GetActivityDetail retrieves detailed activity information
@@ -301,7 +344,7 @@ func (a *App) GetGPSPointForMapClick(activityID int64, lat, lng float64) (Fronte
 	}, nil
 }
 
-// ProcessVideoOverlay aplica o overlay ao vídeo, usando um tempo de início manual ou automático.
+// ProcessVideoOverlay aplica o overlay ao vídeo
 func (a *App) ProcessVideoOverlay(activityID int64, videoPath string, manualStartTimeStr string) (string, error) {
 	if a.stravaClient == nil {
 		return "", fmt.Errorf("not authenticated")
@@ -360,7 +403,7 @@ func (a *App) ProcessVideoOverlay(activityID int64, videoPath string, manualStar
 	}
 
 	correctedVideoEndTime := correctedVideoStartTime.Add(videoMeta.Duration)
-	gpsPoints := processor.GetPointsForTimeRange(correctedVideoStartTime, correctedVideoEndTime) // Usa a hora corrigida
+	gpsPoints := processor.GetPointsForTimeRange(correctedVideoStartTime, correctedVideoEndTime)
 	if len(gpsPoints) == 0 {
 		return "", fmt.Errorf("no GPS data found for video time range")
 	}
@@ -442,7 +485,7 @@ func (a *App) GetAllGPSPoints(activityID int64) ([]FrontendGPSPoint, error) {
 	return frontendPoints, nil
 }
 
-// NOVA FUNÇÃO: Seleção inteligente de pontos GPS para marcadores
+// selectIntelligentGPSPoints - Seleção inteligente de pontos GPS para marcadores
 func (a *App) selectIntelligentGPSPoints(allPoints []gps.GPSPoint) []gps.GPSPoint {
 	if len(allPoints) == 0 {
 		return allPoints
@@ -588,7 +631,7 @@ func (a *App) GetFullGPSTrajectory(activityID int64) ([]FrontendGPSPoint, error)
 	return fullTrajectory, nil
 }
 
-// FUNÇÃO AUXILIAR: Calcula distância entre dois pontos GPS (CORRIGIDA)
+// calculateDistance calcula distância entre dois pontos GPS
 func (a *App) calculateDistance(p1, p2 gps.GPSPoint) float64 {
 	const R = 6371000 // Raio da Terra em metros
 
@@ -600,7 +643,6 @@ func (a *App) calculateDistance(p1, p2 gps.GPSPoint) float64 {
 	dLat := lat2Rad - lat1Rad
 	dLon := lon2Rad - lon1Rad
 
-	// CORREÇÃO: Usar variável diferente de 'a' para evitar conflito
 	haversineA := math.Sin(dLat/2)*math.Sin(dLat/2) +
 		math.Cos(lat1Rad)*math.Cos(lat2Rad)*math.Sin(dLon/2)*math.Sin(dLon/2)
 	c := 2 * math.Atan2(math.Sqrt(haversineA), math.Sqrt(1-haversineA))
@@ -608,7 +650,7 @@ func (a *App) calculateDistance(p1, p2 gps.GPSPoint) float64 {
 	return R * c
 }
 
-// FUNÇÃO ADICIONAL: Versão com densidade customizável
+// GetGPSPointsWithDensity - Versão com densidade customizável
 func (a *App) GetGPSPointsWithDensity(activityID int64, density string) ([]FrontendGPSPoint, error) {
 	if a.stravaClient == nil {
 		return nil, fmt.Errorf("not authenticated")
@@ -682,7 +724,7 @@ func (a *App) GetGPSPointsWithDensity(activityID int64, density string) ([]Front
 	return frontendPoints, nil
 }
 
-// FUNÇÃO AUXILIAR: Seleção por intervalo fixo
+// selectPointsByInterval - Seleção por intervalo fixo
 func (a *App) selectPointsByInterval(allPoints []gps.GPSPoint, interval time.Duration) []gps.GPSPoint {
 	if len(allPoints) == 0 {
 		return allPoints
