@@ -1,5 +1,21 @@
 export namespace main {
 	
+	export class AuthStatus {
+	    is_authenticated: boolean;
+	    message: string;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AuthStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.is_authenticated = source["is_authenticated"];
+	        this.message = source["message"];
+	        this.error = source["error"];
+	    }
+	}
 	export class FrontendActivity {
 	    id: number;
 	    name: string;

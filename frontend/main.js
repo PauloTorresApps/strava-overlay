@@ -1,3 +1,5 @@
+console.log('🚀 main.js carregando...');
+
 // Global variables
 let selectedActivity = null;
 let activityMap = null;
@@ -10,32 +12,211 @@ let activityPolyline = null; // Referência à linha do trajeto no mapa
 let currentMarkerDensity = 'medium';
 let currentGPSMarkersGroup = null;
 
+// --- NOVAS VARIÁVEIS PARA CONTROLE DE AUTENTICAÇÃO ---
+let isAuthenticated = false;
+let isCheckingAuth = false;
+
 // DOM elements
-const authBtn = document.getElementById('authBtn');
-const authStatus = document.getElementById('authStatus');
-const activitiesSection = document.getElementById('activitiesSection');
-const activitiesGrid = document.getElementById('activitiesGrid');
-const activityDetail = document.getElementById('activityDetail');
-const activityInfo = document.getElementById('activityInfo');
-const mapContainer = document.getElementById('mapContainer');
-const videoSection = document.getElementById('videoSection');
-const selectVideoBtn = document.getElementById('selectVideoBtn');
-const videoInfo = document.getElementById('videoInfo');
-const processBtn = document.getElementById('processBtn');
-const progress = document.getElementById('progress');
-const progressBar = document.getElementById('progressBar');
-const progressText = document.getElementById('progressText');
-const result = document.getElementById('result');
+let authBtn, authStatus, activitiesSection, activitiesGrid;
+let activityDetail, activityInfo, mapContainer, videoSection;
+let selectVideoBtn, videoInfo, processBtn, progress;
+let progressBar, progressText, result;
 
 // Event listeners
-document.addEventListener('DOMContentLoaded', initApp);
-authBtn.addEventListener('click', authenticateStrava);
-selectVideoBtn.addEventListener('click', selectVideo);
-processBtn.addEventListener('click', processVideo);
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📄 DOM carregado, inicializando app...');
+    initializeElements();
+    initApp();
+});
 
-function initApp() {
-    console.log('Strava Add Overlay iniciado');
+function initializeElements() {
+    // Inicializa elementos DOM de forma segura
+    authBtn = document.getElementById('authBtn');
+    authStatus = document.getElementById('authStatus');
+    activitiesSection = document.getElementById('activitiesSection');
+    activitiesGrid = document.getElementById('activitiesGrid');
+    activityDetail = document.getElementById('activityDetail');
+    activityInfo = document.getElementById('activityInfo');
+    mapContainer = document.getElementById('mapContainer');
+    videoSection = document.getElementById('videoSection');
+    selectVideoBtn = document.getElementById('selectVideoBtn');
+    videoInfo = document.getElementById('videoInfo');
+    processBtn = document.getElementById('processBtn');
+    progress = document.getElementById('progress');
+    progressBar = document.getElementById('progressBar');
+    progressText = document.getElementById('progressText');
+    result = document.getElementById('result');
+    
+    // Adiciona event listeners de forma segura
+    if (authBtn) authBtn.addEventListener('click', authenticateStrava);
+    if (selectVideoBtn) selectVideoBtn.addEventListener('click', selectVideo);
+    if (processBtn) processBtn.addEventListener('click', processVideo);
+    
+    console.log('✅ Elementos DOM inicializados');
+}
+
+// --- FUNÇÃO PRINCIPAL MODIFICADA PARA AUTENTICAÇÃO AUTOMÁTICA ---
+async function initApp() {
+    console.log('🚀 Strava Add Overlay iniciado');
     preloadMapResources();
+    
+    // NOVA LÓGICA: Verifica autenticação automaticamente na inicialização
+    setTimeout(checkAuthenticationOnStartup, 500);
+}
+
+// --- NOVA FUNÇÃO: Verifica autenticação na inicialização (CORRIGIDA) ---
+async function checkAuthenticationOnStartup() {
+    if (isCheckingAuth) {
+        console.log('⏳ Já verificando autenticação...');
+        return;
+    }
+    
+    console.log('🔍 Iniciando verificação de autenticação...');
+    isCheckingAuth = true;
+    
+    try {
+        // Atualiza UI de forma segura
+        safeUpdateStatus('checking', 'Verificando conexão...');
+        safeShowMessage('🔍 Verificando credenciais salvas...', 'info');
+        
+        if (authBtn) {
+            authBtn.disabled = true;
+            authBtn.textContent = 'Verificando...';
+        }
+        
+        // Verifica se backend está disponível
+        if (!window.go?.main?.App?.CheckAuthenticationStatus) {
+            throw new Error('Backend não disponível');
+        }
+        
+        console.log('📡 Chamando backend...');
+        const response = await window.go.main.App.CheckAuthenticationStatus();
+        console.log('📡 Resposta recebida:', response);
+        
+        if (response?.is_authenticated) {
+            handleAuthSuccess(response);
+        } else {
+            handleAuthFailure(response?.error);
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro na verificação:', error);
+        handleAuthError(error);
+    } finally {
+        isCheckingAuth = false;
+    }
+}
+
+function handleAuthSuccess(response) {
+    console.log('✅ Autenticação bem-sucedida');
+    isAuthenticated = true;
+    
+    safeUpdateStatus('connected', 'Conectado ao Strava');
+    safeShowMessage(`✅ ${response.message}`, 'success');
+    
+    if (authBtn) {
+        authBtn.style.display = 'none';
+    }
+    
+    // Carrega atividades sem await para evitar recursão
+    loadActivitiesSafe();
+}
+
+function handleAuthFailure(error) {
+    console.log('❌ Autenticação necessária:', error);
+    isAuthenticated = false;
+    
+    safeUpdateStatus('error', 'Autenticação necessária');
+    safeShowMessage('Clique no botão abaixo para conectar ao Strava', 'info');
+    
+    if (authBtn) {
+        authBtn.disabled = false;
+        authBtn.textContent = 'Autenticar com Strava';
+        authBtn.style.display = 'block';
+    }
+}
+
+function handleAuthError(error) {
+    console.error('❌ Erro na verificação:', error);
+    isAuthenticated = false;
+    
+    safeUpdateStatus('error', 'Erro na verificação');
+    safeShowMessage('Erro na verificação. Clique para autenticar manualmente.', 'error');
+    
+    if (authBtn) {
+        authBtn.disabled = false;
+        authBtn.textContent = 'Autenticar com Strava';
+        authBtn.style.display = 'block';
+    }
+}
+
+// CARREGAMENTO DE ATIVIDADES - VERSÃO SEGURA
+function loadActivitiesSafe() {
+    console.log('📋 Iniciando carregamento de atividades...');
+    
+    safeUpdateStatus('connected', 'Carregando atividades...');
+    safeShowMessage('Carregando suas atividades...', 'info');
+    
+    window.go.main.App.GetActivities()
+        .then(activities => {
+            console.log(`📋 ${activities?.length || 0} atividades recebidas`);
+            displayActivities(activities);
+            
+            if (activitiesSection) {
+                activitiesSection.classList.remove('hidden');
+            }
+            
+            safeUpdateStatus('connected', `${activities?.length || 0} atividades carregadas`);
+            safeShowMessage(`✅ ${activities?.length || 0} atividades carregadas!`, 'success');
+            
+            setTimeout(() => safeShowMessage('', ''), 3000);
+        })
+        .catch(error => {
+            console.error('❌ Erro ao carregar atividades:', error);
+            safeUpdateStatus('error', 'Erro ao carregar atividades');
+            safeShowMessage(`Erro: ${error}`, 'error');
+        });
+}
+
+// FUNÇÕES AUXILIARES SEGURAS
+function safeUpdateStatus(status, message) {
+    console.log(`🔄 Status: ${status} - ${message}`);
+    
+    try {
+        const indicator = document.getElementById('statusIndicator');
+        const text = document.getElementById('connectionText');
+        const authLoading = document.getElementById('authLoading');
+        const autoConnectInfo = document.getElementById('autoConnectInfo');
+        
+        if (indicator) {
+            indicator.className = `status-indicator ${status}`;
+        }
+        
+        if (text) {
+            text.textContent = message;
+        }
+        
+        if (authLoading && (status === 'connected' || status === 'error')) {
+            authLoading.style.display = 'none';
+        }
+        
+        if (autoConnectInfo && status === 'connected') {
+            autoConnectInfo.style.display = 'none';
+        }
+        
+    } catch (error) {
+        console.error('❌ Erro ao atualizar status:', error);
+    }
+}
+
+function safeShowMessage(message, type) {
+    try {
+        if (authStatus) {
+            authStatus.innerHTML = message ? `<div class="${type}">${message}</div>` : '';
+        }
+    } catch (error) {
+        console.error('❌ Erro ao mostrar mensagem:', error);
+    }
 }
 
 // Pré-carrega recursos do mapa
@@ -54,38 +235,51 @@ function preloadMapResources() {
     });
 }
 
+// --- FUNÇÃO DE AUTENTICAÇÃO MANUAL MODIFICADA ---
 async function authenticateStrava() {
+    if (isCheckingAuth) {
+        console.log('⏳ Verificação em andamento...');
+        return;
+    }
+    
     try {
-        authBtn.disabled = true;
-        authBtn.textContent = 'Conectando...';
-        authStatus.innerHTML = '';
+        if (authBtn) {
+            authBtn.disabled = true;
+            authBtn.textContent = 'Conectando...';
+        }
         
+        safeUpdateStatus('checking', 'Autenticando...');
+        
+        console.log('🔐 Iniciando autenticação manual...');
         await window.go.main.App.AuthenticateStrava();
         
-        showMessage(authStatus, 'Conectado com sucesso ao Strava!', 'success');
-        authBtn.style.display = 'none';
+        isAuthenticated = true;
+        safeUpdateStatus('connected', 'Conectado');
+        safeShowMessage('Conectado com sucesso!', 'success');
         
-        await loadActivities();
+        if (authBtn) {
+            authBtn.style.display = 'none';
+        }
         
-    } catch (error) {
-        showMessage(authStatus, `Erro na autenticação: ${error}`, 'error');
-        authBtn.disabled = false;
-        authBtn.textContent = 'Autenticar com Strava';
-    }
-}
-
-async function loadActivities() {
-    try {
-        const activities = await window.go.main.App.GetActivities();
-        displayActivities(activities);
-        activitiesSection.classList.remove('hidden');
+        console.log('📋 Carregando atividades após autenticação manual...');
+        loadActivitiesSafe();
         
     } catch (error) {
-        showMessage(authStatus, `Erro ao carregar atividades: ${error}`, 'error');
+        console.error('❌ Erro na autenticação:', error);
+        isAuthenticated = false;
+        safeUpdateStatus('error', 'Falha na autenticação');
+        safeShowMessage(`Erro: ${error}`, 'error');
+        
+        if (authBtn) {
+            authBtn.disabled = false;
+            authBtn.textContent = 'Autenticar com Strava';
+        }
     }
 }
 
 function displayActivities(activities) {
+    if (!activitiesGrid) return;
+    
     activitiesGrid.innerHTML = '';
     
     if (!activities || activities.length === 0) {
@@ -134,8 +328,8 @@ async function selectActivity(activity, cardElement) {
         displayActivityDetail(detail);
         await displayMap(activity);
         
-        activityDetail.classList.remove('hidden');
-        videoSection.classList.remove('hidden');
+        if (activityDetail) activityDetail.classList.remove('hidden');
+        if (videoSection) videoSection.classList.remove('hidden');
         
     } catch (error) {
         showMessage(result, `Erro ao carregar detalhes: ${error}`, 'error');
@@ -143,6 +337,8 @@ async function selectActivity(activity, cardElement) {
 }
 
 function displayActivityDetail(detail) {
+    if (!activityInfo) return;
+    
     const startDate = new Date(detail.start_date);
     const date = formatDate(startDate);
     const time = formatTime(startDate);
@@ -176,11 +372,8 @@ function displayActivityDetail(detail) {
     `;
 }
 
-// 2. SUBSTITUIR NO frontend/main.js
 // ========================================
-
-// ========================================
-// SUBSTITUIR NO frontend/main.js
+// FUNÇÕES DE MAPA COMPLETAS
 // ========================================
 
 async function displayMap(activity) {
@@ -209,7 +402,9 @@ async function displayMap(activity) {
         
     } catch (error) {
         console.error("ERRO AO EXIBIR O MAPA:", error);
-        document.getElementById('mapContainer').innerHTML = `<div class="error">Erro ao carregar o mapa: ${error.message}</div>`;
+        if (mapContainer) {
+            mapContainer.innerHTML = `<div class="error">Erro ao carregar o mapa: ${error.message}</div>`;
+        }
     }
 }
 
@@ -337,14 +532,16 @@ function addAdvancedTrajectoryControls(activityId) {
                 showMessage(result, `🔄 Carregando marcadores (${getDensityLabel(newDensity)})...`, 'info');
                 
                 const count = await loadGPSMarkersWithDensity(activityId, newDensity);
-                currentLabel.textContent = getDensityLabel(newDensity);
+                if (currentLabel) {
+                    currentLabel.textContent = getDensityLabel(newDensity);
+                }
                 
                 console.log(`✅ Densidade alterada: ${count} marcadores`);
             });
         }
     }, 100);
     
-    // Legenda de velocidade (mantém a existente)
+    // Legenda de velocidade
     addTrajectoryControls();
 }
 
@@ -380,31 +577,6 @@ async function createSpeedGradientTrajectory(fullTrajectoryPoints) {
     `);
 
     console.log(`✅ Trajeto principal criado (${allLatLngs.length} coordenadas)`);
-
-    // ======================================
-    // OPÇÃO 2: Múltiplos segmentos coloridos (DESCOMENTE SE PREFERIR)
-    // ======================================
-    /*
-    // Para atividades muito longas, pode ser melhor agrupar em segmentos
-    if (fullTrajectoryPoints.length > 2000) {
-        console.log("Trajeto muito longo, criando segmentos coloridos...");
-        const speedSegments = groupPointsBySpeed(fullTrajectoryPoints, 8); // threshold menor
-        
-        speedSegments.forEach((segment, index) => {
-            const latlngs = segment.points.map(p => [p.lat, p.lng]);
-            const avgSpeed = segment.avgSpeed;
-            
-            const polyline = L.polyline(latlngs, {
-                color: getSpeedColor(avgSpeed),
-                weight: getSpeedWeight(avgSpeed),
-                opacity: 0.8,
-                smoothFactor: 0.5 // Menos suavização para manter precisão
-            }).addTo(activityMap);
-
-            polyline.on('click', (e) => handleTrajectoryClick(e, segment.points));
-        });
-    }
-    */
 }
 
 // FUNÇÃO AUXILIAR: Agrupa pontos por velocidade similar
@@ -709,9 +881,6 @@ function getMarkerTypeLabel(type) {
     }
 }
 
-
-
-
 // FUNÇÃO AUXILIAR: Seleciona pontos-chave para marcadores
 function selectKeyPoints(points, intervalSeconds = 30) {
     const keyPoints = [];
@@ -892,19 +1061,6 @@ async function addGPSMarkersToMap(activityId) {
     }
 }
 
-// FUNÇÃO AUXILIAR para resetar marcadores quando necessário
-function clearGPSMarkers() {
-    if (activityMap) {
-        activityMap.eachLayer((layer) => {
-            if (layer instanceof L.CircleMarker && !(layer instanceof L.Marker)) {
-                activityMap.removeLayer(layer);
-            }
-        });
-    }
-}
-
-// A função addAllGpsPointsToMap foi removida e sua lógica integrada em displayMap
-
 // Função para lidar com o clique no mapa para sincronização manual
 async function handleMapClick(e) {
     if (!selectedActivity) return;
@@ -977,11 +1133,16 @@ async function selectVideo() {
         manualSyncTime = ""; // Reseta ao selecionar um novo vídeo
 
         const fileName = path.split(/[\\/]/).pop();
-        videoInfo.innerHTML = `
-            <h4>Vídeo Selecionado</h4>
-            <p><strong>Arquivo:</strong> ${fileName}</p>
-        `;
-        processBtn.disabled = false;
+        if (videoInfo) {
+            videoInfo.innerHTML = `
+                <h4>Vídeo Selecionado</h4>
+                <p><strong>Arquivo:</strong> ${fileName}</p>
+            `;
+        }
+        
+        if (processBtn) {
+            processBtn.disabled = false;
+        }
 
         console.log("Buscando ponto GPS para sincronização automática...");
         const point = await window.go.main.App.GetGPSPointForVideoTime(selectedActivity.id, path);
@@ -1002,10 +1163,16 @@ async function processVideo() {
         return;
     }
     try {
-        processBtn.disabled = true;
-        processBtn.textContent = 'Processando...';
-        progress.classList.remove('hidden');
-        result.innerHTML = '';
+        if (processBtn) {
+            processBtn.disabled = true;
+            processBtn.textContent = 'Processando...';
+        }
+        
+        if (progress) {
+            progress.classList.remove('hidden');
+        }
+        
+        showMessage(result, '', '');
         simulateProgress();
 
         // Passa o tempo manual (pode ser uma string vazia) para o backend
@@ -1016,69 +1183,18 @@ async function processVideo() {
     } catch (error) {
         showMessage(result, `Erro no processamento: ${error}`, 'error');
     } finally {
-        processBtn.disabled = false;
-        processBtn.textContent = 'Processar com Overlay';
+        if (processBtn) {
+            processBtn.disabled = false;
+            processBtn.textContent = 'Processar com Overlay';
+        }
+        
         setTimeout(() => {
-            progress.classList.add('hidden');
+            if (progress) {
+                progress.classList.add('hidden');
+            }
             updateProgress(0);
         }, 3000);
     }
-}
-
-function simulateProgress() {
-    let currentProgress = 0;
-    const interval = setInterval(() => {
-        currentProgress += Math.random() * 15;
-        if (currentProgress > 90) {
-            currentProgress = 90;
-            clearInterval(interval);
-        }
-        updateProgress(currentProgress);
-    }, 800);
-}
-
-function updateProgress(value) {
-    progressBar.style.width = `${value}%`;
-    progressText.textContent = `${Math.round(value)}%`;
-}
-
-function showMessage(container, message, type) {
-    container.innerHTML = `<div class="${type}">${message}</div>`;
-}
-
-function formatDate(date) {
-    return date.toLocaleDateString('pt-BR');
-}
-
-function formatTime(date) {
-    return date.toLocaleTimeString('pt-BR', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-    });
-}
-
-function formatDuration(seconds) {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    
-    if (hours > 0) {
-        return `${hours}h ${minutes}m`;
-    }
-    return `${minutes}m ${secs}s`;
-}
-
-function translateActivityType(type) {
-    const translations = {
-        'Ride': 'Ciclismo',
-        'Run': 'Corrida',
-        'Hike': 'Caminhada',
-        'Walk': 'Caminhada',
-        'Swimming': 'Natação',
-        'Workout': 'Treino',
-        'WeightTraining': 'Musculação'
-    };
-    return translations[type] || type;
 }
 
 async function loadGPSMarkersWithDensity(activityId, density = 'medium') {
@@ -1102,7 +1218,7 @@ async function loadGPSMarkersWithDensity(activityId, density = 'medium') {
 
         if (!gpsMarkers || gpsMarkers.length === 0) {
             console.log("Nenhum marcador GPS encontrado");
-            return;
+            return 0;
         }
 
         console.log(`✅ ${gpsMarkers.length} marcadores carregados (densidade: ${density})`);
@@ -1196,12 +1312,93 @@ function getDensityLabel(density) {
     }
 }
 
+function simulateProgress() {
+    let currentProgress = 0;
+    const interval = setInterval(() => {
+        currentProgress += Math.random() * 15;
+        if (currentProgress > 90) {
+            currentProgress = 90;
+            clearInterval(interval);
+        }
+        updateProgress(currentProgress);
+    }, 800);
+}
+
+function updateProgress(value) {
+    if (progressBar) {
+        progressBar.style.width = `${value}%`;
+    }
+    if (progressText) {
+        progressText.textContent = `${Math.round(value)}%`;
+    }
+}
+
+function showMessage(container, message, type) {
+    try {
+        if (container) {
+            container.innerHTML = message ? `<div class="${type}">${message}</div>` : '';
+        }
+    } catch (error) {
+        console.error('❌ Erro ao mostrar mensagem:', error);
+    }
+}
+
+function formatDate(date) {
+    return date.toLocaleDateString('pt-BR');
+}
+
+function formatTime(date) {
+    return date.toLocaleTimeString('pt-BR', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+}
+
+function formatDuration(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
+    if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m ${secs}s`;
+}
+
+function translateActivityType(type) {
+    const translations = {
+        'Ride': 'Ciclismo',
+        'Run': 'Corrida',
+        'Hike': 'Caminhada',
+        'Walk': 'Caminhada',
+        'Swimming': 'Natação',
+        'Workout': 'Treino',
+        'WeightTraining': 'Musculação'
+    };
+    return translations[type] || type;
+}
+
 // FUNÇÃO AUXILIAR: Remove controles antigos
 function clearTrajectoryControls() {
     // Remove controles existentes se houver
-    activityMap.eachLayer((layer) => {
-        if (layer instanceof L.Control) {
-            activityMap.removeControl(layer);
-        }
-    });
+    if (activityMap) {
+        activityMap.eachLayer((layer) => {
+            if (layer instanceof L.Control) {
+                activityMap.removeControl(layer);
+            }
+        });
+    }
 }
+
+// FUNÇÃO AUXILIAR para resetar marcadores quando necessário
+function clearGPSMarkers() {
+    if (activityMap) {
+        activityMap.eachLayer((layer) => {
+            if (layer instanceof L.CircleMarker && !(layer instanceof L.Marker)) {
+                activityMap.removeLayer(layer);
+            }
+        });
+    }
+}
+
+console.log('✅ main.js carregado completamente - Versão com Autenticação Automática');

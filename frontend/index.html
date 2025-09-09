@@ -35,6 +35,89 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        /* --- NOVOS ESTILOS PARA AUTENTICAÇÃO AUTOMÁTICA --- */
+        .auth-section {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .auth-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 1rem;
+            background: rgba(88, 166, 255, 0.1);
+            border-radius: 6px;
+            margin: 0.5rem 0;
+        }
+
+        .auth-loading .spinner {
+            border-color: #30363d;
+            border-top-color: #58a6ff;
+            width: 20px;
+            height: 20px;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            margin: 0.5rem 0;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #8b949e;
+        }
+
+        .status-indicator.checking {
+            background: #ffa657;
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-indicator.connected {
+            background: #56d364;
+        }
+
+        .status-indicator.error {
+            background: #f85149;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .auto-connect-info {
+            background: rgba(33, 38, 45, 0.8);
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 1rem;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+            color: #8b949e;
+        }
+
+        .auto-connect-info h4 {
+            color: #58a6ff;
+            margin: 0 0 0.5rem 0;
+            font-size: 1rem;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* ------------------------------------------------- */
     </style>
 </head>
 <body>
@@ -42,14 +125,37 @@
         <header class="header">
             <h1>🚴‍♂️ Strava Add Overlay 🏃</h1>
             <p>Adicione overlays de dados GPS aos seus vídeos</p>
+            
+            <!-- --- NOVA SEÇÃO: Status de Conexão --- -->
+            <div class="connection-status">
+                <div id="statusIndicator" class="status-indicator checking"></div>
+                <span id="connectionText">Verificando conexão com Strava...</span>
+            </div>
+            <!-- -------------------------------------- -->
         </header>
 
         <main class="container">
-            <!-- Seção de Autenticação -->
+            <!-- Seção de Autenticação MODIFICADA -->
             <section id="authSection" class="auth-section">
                 <h2>Conectar ao Strava</h2>
-                <button id="authBtn" class="btn-primary">Autenticar com Strava</button>
+                
+                <!-- --- NOVA: Informação sobre conexão automática --- -->
+                <div id="autoConnectInfo" class="auto-connect-info">
+                    <h4>🔄 Conexão Automática</h4>
+                    <p>A aplicação tentará se conectar automaticamente ao Strava usando suas credenciais salvas. 
+                    Se não for possível, será solicitada uma nova autenticação.</p>
+                </div>
+                <!-- -------------------------------------------------- -->
+                
+                <button id="authBtn" class="btn-primary" style="display: none;">Autenticar com Strava</button>
                 <div id="authStatus"></div>
+                
+                <!-- --- NOVA: Loading de verificação --- -->
+                <div id="authLoading" class="auth-loading">
+                    <div class="spinner"></div>
+                    <span>Verificando credenciais salvas...</span>
+                </div>
+                <!-- ------------------------------------ -->
             </section>
 
             <!-- Lista de Atividades -->
@@ -105,6 +211,9 @@
             }
             return tile;
         };
+        
+        // REMOVIDA A DEFINIÇÃO DUPLICADA DE updateConnectionStatus
+        // A função agora está definida apenas no main.js
     </script>
     <script src="main.js"></script>
 </body>

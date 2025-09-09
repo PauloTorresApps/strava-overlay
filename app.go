@@ -27,10 +27,14 @@ type App struct {
 	stravaClient *strava.Client
 }
 
-// --- ESTRUTURAS PARA O FRONTEND ---
-// Criamos versões das nossas structs que usam `string` para datas,
-// que é um formato que o Wails e o JavaScript entendem perfeitamente.
+// AuthStatus representa o status da autenticação
+type AuthStatus struct {
+	IsAuthenticated bool   `json:"is_authenticated"`
+	Message         string `json:"message"`
+	Error           string `json:"error,omitempty"`
+}
 
+// --- ESTRUTURAS PARA O FRONTEND (mantidas iguais) ---
 type FrontendGPSPoint struct {
 	Time     string  `json:"time"`
 	Lat      float64 `json:"lat"`
@@ -80,6 +84,30 @@ func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
+// NOVA FUNÇÃO: Verifica automaticamente se há um token válido
+func (a *App) CheckAuthenticationStatus() AuthStatus {
+	log.Printf("🔍 Verificando status de autenticação...")
+
+	token, err := a.stravaAuth.GetValidToken(a.ctx)
+	if err != nil {
+		log.Printf("❌ Falha na verificação de token: %v", err)
+		return AuthStatus{
+			IsAuthenticated: false,
+			Message:         "Autenticação necessária",
+			Error:           err.Error(),
+		}
+	}
+
+	// Se chegou até aqui, o token é válido
+	a.stravaClient = strava.NewClient(token)
+	log.Printf("✅ Token válido encontrado - Cliente Strava inicializado")
+
+	return AuthStatus{
+		IsAuthenticated: true,
+		Message:         "Conectado automaticamente ao Strava",
+	}
+}
+
 func (a *App) SelectVideoFile() (string, error) {
 	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title:   "Selecione um arquivo de vídeo",
@@ -87,13 +115,17 @@ func (a *App) SelectVideoFile() (string, error) {
 	})
 }
 
-// AuthenticateStrava handles Strava authentication
+// AuthenticateStrava handles Strava authentication (mantida para autenticação manual)
 func (a *App) AuthenticateStrava() error {
+	log.Printf("🔐 Iniciando autenticação manual do Strava...")
+
 	token, err := a.stravaAuth.GetValidToken(a.ctx)
 	if err != nil {
 		return fmt.Errorf("authentication failed: %w", err)
 	}
 	a.stravaClient = strava.NewClient(token)
+
+	log.Printf("✅ Autenticação manual concluída com sucesso")
 	return nil
 }
 
@@ -136,8 +168,6 @@ func (a *App) GetActivityDetail(activityID int64) (*strava.ActivityDetail, error
 }
 
 // GetGPSPointForVideoTime finds the GPS point corresponding to a video's start time
-// Substitua a função GetGPSPointForVideoTime em app.go
-
 func (a *App) GetGPSPointForVideoTime(activityID int64, videoPath string) (FrontendGPSPoint, error) {
 	if a.stravaClient == nil {
 		return FrontendGPSPoint{}, fmt.Errorf("not authenticated")

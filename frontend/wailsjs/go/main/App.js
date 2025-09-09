@@ -6,6 +6,10 @@ export function AuthenticateStrava() {
   return window['go']['main']['App']['AuthenticateStrava']();
 }
 
+export function CheckAuthenticationStatus() {
+  return window['go']['main']['App']['CheckAuthenticationStatus']();
+}
+
 export function GetActivities() {
   return window['go']['main']['App']['GetActivities']();
 }
