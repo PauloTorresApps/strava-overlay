@@ -72,7 +72,6 @@ async function displayMap(activity) {
         }
     }
 }
-
 /**
  * Carrega e exibe a trajetória interpolada com gradiente de velocidade.
  * @param {object} activity - A atividade para a qual carregar a trajetória.
@@ -92,7 +91,7 @@ async function loadInterpolatedTrajectory(activity) {
 
         console.log(`✅ Trajeto completo carregado: ${fullTrajectory.length} pontos interpolados`);
 
-        // Cria a trajetória principal
+        // Cria a trajetória principal COM GRADIENTE REAL
         createSpeedGradientTrajectory(fullTrajectory);
 
         // Adiciona marcadores de início e fim
@@ -112,9 +111,12 @@ async function loadInterpolatedTrajectory(activity) {
         const bounds = L.latLngBounds(fullTrajectory.map(p => [p.lat, p.lng]));
         activityMap.fitBounds(bounds, { padding: [20, 20] });
         
+        // Adiciona legenda de velocidade
+        addSpeedLegend();
+        
         console.log("🎯 Mapa ajustado para mostrar toda a trajetória");
         
-        showMessage(result, `✅ Trajeto carregado: ${fullTrajectory.length} pontos GPS`, 'success');
+        showMessage(result, `✅ Trajeto colorido carregado: ${fullTrajectory.length} pontos GPS`, 'success');
 
     } catch (error) {
         console.error("❌ Erro ao carregar trajeto:", error);
@@ -124,34 +126,92 @@ async function loadInterpolatedTrajectory(activity) {
 }
 
 /**
- * Cria a polilinha no mapa colorida pela velocidade.
+ * Cria a polilinha no mapa colorida pela velocidade - VERSÃO CORRIGIDA.
  * @param {Array} trajectoryPoints - Os pontos da trajetória.
  */
 function createSpeedGradientTrajectory(trajectoryPoints) {
-    console.log(`🎨 Criando trajeto colorido com ${trajectoryPoints.length} pontos...`);
+    console.log(`🎨 Criando trajeto com gradiente real de velocidade: ${trajectoryPoints.length} pontos...`);
     
-    const allLatLngs = trajectoryPoints.map(p => [p.lat, p.lng]);
-    const avgSpeed = trajectoryPoints.reduce((sum, p) => sum + (p.velocity * 3.6), 0) / trajectoryPoints.length;
+    if (trajectoryPoints.length < 2) {
+        console.warn('⚠️ Pontos insuficientes para criar trajeto');
+        return;
+    }
 
-    activityPolyline = L.polyline(allLatLngs, {
-        color: getSpeedColor(avgSpeed),
-        weight: 4,
-        opacity: 0.8
-    }).addTo(activityMap);
+    // Grupo para armazenar todos os segmentos
+    const trajectoryGroup = L.layerGroup().addTo(activityMap);
+    
+    // Cria segmentos coloridos individualmente
+    for (let i = 0; i < trajectoryPoints.length - 1; i++) {
+        const currentPoint = trajectoryPoints[i];
+        const nextPoint = trajectoryPoints[i + 1];
+        
+        // Velocidade do segmento atual (em km/h)
+        const segmentSpeed = currentPoint.velocity * 3.6;
+        
+        // Coordenadas do segmento
+        const segmentCoords = [
+            [currentPoint.lat, currentPoint.lng],
+            [nextPoint.lat, nextPoint.lng]
+        ];
+        
+        // Cria polilinha individual para este segmento
+        const segmentLine = L.polyline(segmentCoords, {
+            color: getSpeedColor(segmentSpeed),
+            weight: 4,
+            opacity: 0.8,
+            smoothFactor: 1.0
+        });
+        
+        // Adiciona popup com info do segmento
+        segmentLine.bindPopup(`
+            <div style="font-size: 12px;">
+                <strong>📍 Segmento ${i + 1}</strong><br>
+                🏃 Velocidade: ${segmentSpeed.toFixed(1)} km/h<br>
+                ⏰ Tempo: ${new Date(currentPoint.time).toLocaleTimeString('pt-BR')}<br>
+                📏 Altitude: ${currentPoint.altitude.toFixed(0)}m
+            </div>
+        `);
+        
+        // Adiciona handler de clique para sincronização
+        segmentLine.on('click', (e) => {
+            handleSegmentClick(e, currentPoint);
+        });
+        
+        // Adiciona ao grupo
+        trajectoryGroup.addLayer(segmentLine);
+    }
+    
+    // Armazena referência global
+    activityPolyline = trajectoryGroup;
+    
+    // Calcula estatísticas para log
+    const speeds = trajectoryPoints.map(p => p.velocity * 3.6);
+    const avgSpeed = speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length;
+    const maxSpeed = Math.max(...speeds);
+    const minSpeed = Math.min(...speeds);
+    
+    console.log(`✅ Trajeto criado com gradiente de velocidade:`);
+    console.log(`   📊 Velocidade média: ${avgSpeed.toFixed(1)} km/h`);
+    console.log(`   🚀 Velocidade máxima: ${maxSpeed.toFixed(1)} km/h`);
+    console.log(`   🐌 Velocidade mínima: ${minSpeed.toFixed(1)} km/h`);
+    console.log(`   🎨 ${trajectoryPoints.length - 1} segmentos coloridos`);
+}
 
-    // Handler de clique para sincronização
-    activityPolyline.on('click', (e) => handleTrajectoryClick(e, trajectoryPoints));
-
-    activityPolyline.bindPopup(`
-        <div style="font-size: 12px;">
-            <strong>📊 Trajeto Completo</strong><br>
-            🏃 Velocidade média: ${avgSpeed.toFixed(1)} km/h<br>
-            📏 ${trajectoryPoints.length} pontos GPS<br>
-            💡 <em>Clique no trajeto para sincronizar o vídeo</em>
-        </div>
-    `);
-
-    console.log(`✅ Trajeto principal criado com ${allLatLngs.length} coordenadas`);
+/**
+ * Handler de clique otimizado para segmentos individuais.
+ * @param {L.LeafletMouseEvent} e - Evento de clique
+ * @param {object} point - Ponto GPS do segmento
+ */
+function handleSegmentClick(e, point) {
+    console.log(`🖱️ Clique no segmento: ${point.time}`);
+    
+    manualSyncTime = point.time;
+    updateVideoStartMarker(point.lat, point.lng, '▶️ Início Manual do Vídeo');
+    
+    const timeStr = new Date(point.time).toLocaleTimeString('pt-BR');
+    const speedStr = (point.velocity * 3.6).toFixed(1);
+    
+    showMessage(result, `🎯 Sincronização: ${timeStr} (${speedStr} km/h)`, 'success');
 }
 
 /**
@@ -189,18 +249,107 @@ function handleTrajectoryClick(e, trajectoryPoints) {
 }
 
 /**
- * Retorna uma cor baseada na velocidade em km/h.
+ * Retorna uma cor baseada na velocidade em km/h - CORES MAIS CONTRASTANTES.
  * @param {number} speedKmh - A velocidade em km/h.
  * @returns {string} O código hexadecimal da cor.
  */
 function getSpeedColor(speedKmh) {
-    if (speedKmh > 40) return '#dc3545'; // Vermelho - muito rápido
-    if (speedKmh > 25) return '#fd7e14'; // Laranja - rápido
-    if (speedKmh > 15) return '#ffc107'; // Amarelo - moderado
-    if (speedKmh > 8) return '#28a745';  // Verde - lento
-    return '#6c757d';                   // Cinza - muito lento/parado
+    // Velocidades muito baixas ou parada (0-3 km/h) - CINZA ESCURO
+    if (speedKmh <= 3) return '#6c757d';
+    
+    // Muito lento (3-8 km/h) - AZUL
+    if (speedKmh <= 8) return '#0d6efd';
+    
+    // Lento (8-15 km/h) - VERDE
+    if (speedKmh <= 15) return '#198754';
+    
+    // Moderado (15-25 km/h) - AMARELO/LARANJA
+    if (speedKmh <= 25) return '#fd7e14';
+    
+    // Rápido (25-40 km/h) - LARANJA ESCURO
+    if (speedKmh <= 40) return '#d63384';
+    
+    // Muito rápido (40+ km/h) - VERMELHO
+    return '#dc3545';
 }
 
+/**
+ * Versão alternativa com gradiente suave usando bibliotecas externas.
+ * @param {Array} trajectoryPoints - Os pontos da trajetória.
+ */
+function createSmoothSpeedGradient(trajectoryPoints) {
+    console.log(`🌈 Criando trajeto com gradiente suave: ${trajectoryPoints.length} pontos...`);
+    
+    // Cria um canvas para gerar o gradiente
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = trajectoryPoints.length;
+    canvas.height = 1;
+    
+    // Cria gradiente baseado nas velocidades
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+    
+    trajectoryPoints.forEach((point, index) => {
+        const speed = point.velocity * 3.6;
+        const position = index / (trajectoryPoints.length - 1);
+        gradient.addColorStop(position, getSpeedColor(speed));
+    });
+    
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Para uma implementação completa, seria necessário usar bibliotecas como:
+    // - Leaflet.hotline
+    // - Leaflet.multicolor-polyline
+    // Por enquanto, usamos a versão por segmentos acima
+    
+    console.log('ℹ️ Para gradiente suave completo, considere usar Leaflet.hotline');
+}
+
+/**
+ * Cria legenda de velocidade no mapa.
+ */
+function addSpeedLegend() {
+    if (!activityMap) return;
+    
+    const legend = L.control({ position: 'bottomright' });
+    
+    legend.onAdd = function() {
+        const div = L.DomUtil.create('div', 'speed-legend');
+        div.innerHTML = `
+            <div style="background: rgba(13,17,23,0.9); padding: 10px; border-radius: 5px; font-size: 12px; color: white; border: 1px solid #30363d;">
+                <div style="font-weight: bold; margin-bottom: 5px;">🏃 Velocidade</div>
+                <div style="display: flex; align-items: center; margin: 2px 0;">
+                    <div style="width: 15px; height: 3px; background: #6c757d; margin-right: 5px;"></div>
+                    Parado (0-3 km/h)
+                </div>
+                <div style="display: flex; align-items: center; margin: 2px 0;">
+                    <div style="width: 15px; height: 3px; background: #0d6efd; margin-right: 5px;"></div>
+                    Muito lento (3-8 km/h)
+                </div>
+                <div style="display: flex; align-items: center; margin: 2px 0;">
+                    <div style="width: 15px; height: 3px; background: #198754; margin-right: 5px;"></div>
+                    Lento (8-15 km/h)
+                </div>
+                <div style="display: flex; align-items: center; margin: 2px 0;">
+                    <div style="width: 15px; height: 3px; background: #fd7e14; margin-right: 5px;"></div>
+                    Moderado (15-25 km/h)
+                </div>
+                <div style="display: flex; align-items: center; margin: 2px 0;">
+                    <div style="width: 15px; height: 3px; background: #d63384; margin-right: 5px;"></div>
+                    Rápido (25-40 km/h)
+                </div>
+                <div style="display: flex; align-items: center; margin: 2px 0;">
+                    <div style="width: 15px; height: 3px; background: #dc3545; margin-right: 5px;"></div>
+                    Muito rápido (40+ km/h)
+                </div>
+            </div>
+        `;
+        return div;
+    };
+    
+    legend.addTo(activityMap);
+}
 /**
  * Carrega uma trajetória simplificada como fallback.
  * @param {object} activity - Os dados da atividade contendo o `summary_polyline`.
