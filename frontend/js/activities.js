@@ -1,0 +1,184 @@
+console.log('🚴 activities.js carregando...');
+
+/**
+ * Carrega uma página específica de atividades do backend.
+ * @param {number} page - O número da página a ser carregada.
+ */
+async function loadActivitiesPage(page) {
+    if (isLoadingMore) return;
+
+    console.log(`📋 Carregando página ${page} de atividades...`);
+    isLoadingMore = true;
+    updateLoadMoreButton(true);
+
+    try {
+        const response = await window.go.main.App.GetActivitiesPage(page);
+        if (!response) throw new Error('Resposta vazia do servidor');
+
+        currentPage = page;
+        hasMorePages = response.has_more;
+        
+        if (page === 1) allActivities = [];
+        if (response.activities?.length > 0) {
+            allActivities = allActivities.concat(response.activities);
+        }
+
+        displayActivities(getFilteredActivities());
+        updateStatistics();
+
+    } catch (error) {
+        console.error('❌ Erro ao carregar atividades:', error);
+        showMessage(result, `Erro: ${error}`, 'error');
+    } finally {
+        isLoadingMore = false;
+        updateLoadMoreButton(false);
+    }
+}
+
+/**
+ * Carrega a próxima página de atividades.
+ */
+function loadMoreActivities() {
+    if (!hasMorePages || isLoadingMore) return;
+    loadActivitiesPage(currentPage + 1);
+}
+
+/**
+ * Filtra as atividades com base na configuração do checkbox.
+ * @returns {Array} A lista de atividades filtrada.
+ */
+function getFilteredActivities() {
+    return showOnlyGPS ? allActivities.filter(activity => activity.has_gps) : allActivities;
+}
+
+/**
+ * Manipula a mudança no filtro de GPS.
+ * @param {Event} event - O evento de mudança do checkbox.
+ */
+function handleFilterChange(event) {
+    showOnlyGPS = event.target.checked;
+    displayActivities(getFilteredActivities());
+    updateStatistics();
+}
+
+/**
+ * Atualiza as estatísticas de atividades (total e com GPS).
+ */
+function updateStatistics() {
+    const totalCount = allActivities.length;
+    const gpsCount = allActivities.filter(a => a.has_gps).length;
+
+    if (totalActivitiesSpan) totalActivitiesSpan.textContent = `${totalCount} atividades carregadas`;
+    if (gpsActivitiesSpan) gpsActivitiesSpan.textContent = `${gpsCount} com GPS`;
+}
+
+/**
+ * Renderiza a lista de atividades na tela.
+ * @param {Array} activities - A lista de atividades para exibir.
+ */
+function displayActivities(activities) {
+    if (!activitiesGrid) return;
+    activitiesGrid.innerHTML = '';
+
+    if (!activities || activities.length === 0) {
+        activitiesGrid.innerHTML = '<p>Nenhuma atividade encontrada com os filtros aplicados.</p>';
+        return;
+    }
+    activities.forEach(activity => {
+        const card = createActivityCard(activity);
+        activitiesGrid.appendChild(card);
+    });
+}
+
+/**
+ * Cria um elemento de card para uma atividade.
+ * @param {object} activity - Os dados da atividade.
+ * @returns {HTMLElement} O elemento do card criado.
+ */
+function createActivityCard(activity) {
+    const card = document.createElement('div');
+    card.className = 'activity-card';
+    if (!activity.has_gps) card.classList.add('no-gps');
+
+    if (activity.has_gps) {
+        card.onclick = () => selectActivity(activity, card);
+    } else {
+        card.title = 'Esta atividade não possui dados GPS';
+    }
+
+    const date = formatDate(new Date(activity.start_date));
+    const distance = (activity.distance / 1000).toFixed(2);
+    const duration = formatDuration(activity.moving_time);
+    const maxSpeed = activity.max_speed ? (activity.max_speed * 3.6).toFixed(1) : 'N/A';
+
+    const gpsBadge = activity.has_gps
+        ? '<span class="gps-badge">GPS</span>'
+        : '<span class="gps-badge no-gps-badge">Sem GPS</span>';
+
+    card.innerHTML = `
+        <h3>${activity.name} ${gpsBadge}</h3>
+        <p><strong>Tipo:</strong> ${translateActivityType(activity.type)}</p>
+        <p><strong>Data:</strong> ${date}</p>
+        <p><strong>Distância:</strong> ${distance} km</p>
+        <p><strong>Duração:</strong> ${duration}</p>
+        ${activity.has_gps ? `<p><strong>Vel. Máx:</strong> ${maxSpeed} km/h</p>` : ''}
+    `;
+    return card;
+}
+
+/**
+ * Seleciona uma atividade, busca detalhes e exibe no mapa.
+ * @param {object} activity - A atividade selecionada.
+ * @param {HTMLElement} cardElement - O elemento do card clicado.
+ */
+async function selectActivity(activity, cardElement) {
+    try {
+        document.querySelectorAll('.activity-card.selected').forEach(el => el.classList.remove('selected'));
+        cardElement.classList.add('selected');
+        selectedActivity = activity;
+
+        const detail = await window.go.main.App.GetActivityDetail(activity.id);
+        displayActivityDetail(detail);
+        await displayMap(activity);
+
+        if (activityDetail) activityDetail.classList.remove('hidden');
+        if (videoSection) videoSection.classList.remove('hidden');
+
+    } catch (error) {
+        showMessage(result, `Erro ao carregar detalhes: ${error}`, 'error');
+    }
+}
+
+/**
+ * Exibe os detalhes de uma atividade na seção de informações.
+ * @param {object} detail - Os dados detalhados da atividade.
+ */
+function displayActivityDetail(detail) {
+    if (!activityInfo) return;
+
+    const startDate = new Date(detail.start_date);
+    const distance = (detail.distance / 1000).toFixed(2);
+    const elevation = detail.total_elevation_gain ? detail.total_elevation_gain.toFixed(0) : 'N/A';
+    const maxSpeed = detail.max_speed ? (detail.max_speed * 3.6).toFixed(1) : 'N/A';
+    const calories = detail.calories ? detail.calories.toFixed(0) : 'N/A';
+
+    activityInfo.innerHTML = `
+        <div class="info-grid">
+            <div class="info-item">
+                <h4>Informações Básicas</h4>
+                <p><strong>Nome:</strong> ${detail.name}</p>
+                <p><strong>Tipo:</strong> ${translateActivityType(detail.type)}</p>
+                <p><strong>Data:</strong> ${formatDate(startDate)}</p>
+                <p><strong>Horário:</strong> ${formatTime(startDate)}</p>
+            </div>
+            <div class="info-item">
+                <h4>Desempenho</h4>
+                <p><strong>Distância:</strong> ${distance} km</p>
+                <p><strong>Duração:</strong> ${formatDuration(detail.moving_time)}</p>
+                <p><strong>Vel. Máxima:</strong> ${maxSpeed} km/h</p>
+                <p><strong>Calorias:</strong> ${calories}</p>
+                <p><strong>Ganho de Elevação:</strong> ${elevation} m</p>
+            </div>
+        </div>
+    `;
+}

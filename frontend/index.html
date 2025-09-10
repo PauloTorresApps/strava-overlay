@@ -3,368 +3,248 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Strava Add Overlay</title>
-    <link rel="stylesheet" href="style.css">
-    
-    <!-- Cache das bibliotecas localmente -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
-          crossorigin="anonymous" />
-    
+    <title>Strava Overlay App</title>
+    <!-- Incluindo Leaflet para o mapa -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.polyline.encoded/1.1.0/Polyline.encoded.js"></script>
+
     <style>
-        /* Loading spinner para o mapa */
-        .map-loading {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            color: #8b949e;
+        :root {
+            --bg-color: #0d1117;
+            --primary-text: #c9d1d9;
+            --secondary-text: #8b949e;
+            --container-bg: #161b22;
+            --border-color: #30363d;
+            --accent-color: #58a6ff;
+            --accent-hover: #79c0ff;
+            --button-bg: #238636;
+            --button-hover-bg: #2ea043;
+            --error-bg: #411a1f;
+            --error-text: #f85149;
+            --error-border: #811e24;
+            --success-bg: #1a3123;
+            --success-text: #56d364;
+            --success-border: #2a5a38;
+            --info-bg: #1e3a4c;
+            --info-text: #79c0ff;
+            --info-border: #3c6e8e;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+            background-color: var(--bg-color); 
+            color: var(--primary-text); 
+            margin: 0; 
+            padding: 20px; 
+            line-height: 1.5;
+        }
+
+        .container { 
+            max-width: 1200px; 
+            margin: auto; 
+            background: var(--container-bg); 
+            padding: 25px; 
+            border-radius: 8px; 
+            border: 1px solid var(--border-color);
+        }
+
+        h1, h2 { 
+            color: var(--primary-text); 
+            border-bottom: 1px solid var(--border-color); 
+            padding-bottom: 10px; 
+            margin-top: 0;
         }
         
-        .spinner {
-            border: 2px solid #30363d;
-            border-top: 2px solid #58a6ff;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            animation: spin 1s linear infinite;
-            margin-right: 8px;
+        section {
+            margin-top: 25px;
+        }
+
+        .hidden { display: none; }
+
+        button { 
+            background-color: var(--button-bg); 
+            color: white; 
+            border: 1px solid rgba(240, 246, 252, 0.1);
+            padding: 10px 16px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 1em; 
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: var(--button-hover-bg);
+        }
+        button:disabled { 
+            background-color: #21262d;
+            color: var(--secondary-text);
+            border-color: var(--border-color);
+            cursor: not-allowed; 
+        }
+
+        #authSection {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .activity-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
+            gap: 20px; 
+            margin-top: 20px; 
+        }
+
+        .activity-card { 
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color); 
+            padding: 15px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            transition: box-shadow 0.2s, border-color 0.2s; 
+        }
+        .activity-card.selected, .activity-card:hover { 
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.3);
+        }
+        .activity-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.1em;
+        }
+        .activity-card p {
+            margin: 4px 0;
+            font-size: 0.9em;
+            color: var(--secondary-text);
+        }
+        .activity-card p strong {
+            color: var(--primary-text);
+        }
+
+        .activity-card.no-gps { 
+            background-color: #1c2128;
+            cursor: not-allowed; 
+            opacity: 0.6; 
+        }
+
+        #mapContainer { 
+            height: 500px; 
+            width: 100%; 
+            margin-top: 20px; 
+            border-radius: 6px; 
+            border: 1px solid var(--border-color); 
+            background-color: var(--bg-color);
+        }
+        /* Estilo dark para os tiles do mapa */
+        .leaflet-tile-pane {
+            filter: invert(1) hue-rotate(180deg) brightness(95%) contrast(90%);
+        }
+
+        .info-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+            gap: 20px; 
+        }
+        .info-item h4 { margin-top: 0; color: var(--accent-color); }
+
+        .result-message div { 
+            padding: 12px 15px; 
+            border-radius: 6px; 
+            margin-top: 15px; 
+            border: 1px solid;
+            font-size: 0.95em;
+        }
+        .result-message .success { background-color: var(--success-bg); color: var(--success-text); border-color: var(--success-border); }
+        .result-message .error { background-color: var(--error-bg); color: var(--error-text); border-color: var(--error-border); }
+        .result-message .info { background-color: var(--info-bg); color: var(--info-text); border-color: var(--info-border); }
+
+        .gps-badge { 
+            font-size: 0.7em; 
+            padding: 3px 8px; 
+            border-radius: 10px; 
+            color: white; 
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        .gps-badge { background-color: #238636; }
+        .no-gps-badge { background-color: #6a737d; }
+        
+        #stats {
+            margin-top: 15px;
+            color: var(--secondary-text);
         }
         
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        #loadMoreBtn {
+            display: block;
+            margin: 20px auto 0;
         }
-
-        /* --- ESTILOS PARA AUTENTICAÇÃO AUTOMÁTICA --- */
-        .auth-section {
-            position: relative;
-            transition: all 0.3s ease;
-        }
-
-        .auth-loading {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            padding: 1rem;
-            background: rgba(88, 166, 255, 0.1);
+        
+        #videoInfo p {
+            background: var(--bg-color);
+            padding: 10px;
             border-radius: 6px;
-            margin: 0.5rem 0;
+            border: 1px solid var(--border-color);
         }
-
-        .auth-loading .spinner {
-            border-color: #30363d;
-            border-top-color: #58a6ff;
-            width: 20px;
-            height: 20px;
-        }
-
-        .connection-status {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.9rem;
-            margin: 0.5rem 0;
-        }
-
-        .status-indicator {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #8b949e;
-        }
-
-        .status-indicator.checking {
-            background: #ffa657;
-            animation: pulse 1.5s infinite;
-        }
-
-        .status-indicator.connected {
-            background: #56d364;
-        }
-
-        .status-indicator.error {
-            background: #f85149;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .auto-connect-info {
-            background: rgba(33, 38, 45, 0.8);
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 1rem;
-            margin: 1rem 0;
-            font-size: 0.9rem;
-            color: #8b949e;
-        }
-
-        .auto-connect-info h4 {
-            color: #58a6ff;
-            margin: 0 0 0.5rem 0;
-            font-size: 1rem;
-        }
-
-        .fade-in {
-            animation: fadeIn 0.5s ease-in;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* --- ESTILOS PARA PAGINAÇÃO --- */
-        .activities-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-
-        .activities-info {
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-            color: #8b949e;
-            font-size: 0.9rem;
-        }
-
-        .filter-controls {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 1rem;
-            align-items: center;
-        }
-
-        .filter-controls label {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            color: #c9d1d9;
-            font-size: 0.9rem;
-        }
-
-        .filter-controls input[type="checkbox"] {
-            accent-color: #58a6ff;
-        }
-
-        .pagination-controls {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 1rem;
-            margin-top: 1.5rem;
-            padding: 1rem;
-            background: rgba(33, 38, 45, 0.5);
-            border-radius: 6px;
-        }
-
-        .pagination-btn {
-            background: #21262d;
-            color: #c9d1d9;
-            border: 1px solid #30363d;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.2s;
-            font-size: 0.9rem;
-        }
-
-        .pagination-btn:hover:not(:disabled) {
-            background: #30363d;
-            border-color: #58a6ff;
-        }
-
-        .pagination-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .pagination-info {
-            color: #c9d1d9;
-            font-size: 0.9rem;
-        }
-
-        .load-more-btn {
-            width: 100%;
-            padding: 1rem;
-            background: #238636;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 500;
-            transition: background 0.2s;
-            margin-top: 1rem;
-        }
-
-        .load-more-btn:hover:not(:disabled) {
-            background: #2ea043;
-        }
-
-        .load-more-btn:disabled {
-            background: #484f58;
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
-
-        .loading-more {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-        }
-
-        .activity-card.no-gps {
-            opacity: 0.7;
-            border-style: dashed;
-        }
-
-        .activity-card .gps-badge {
-            display: inline-block;
-            padding: 0.2rem 0.5rem;
-            background: #238636;
-            color: white;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            font-weight: 500;
-            margin-left: 0.5rem;
-        }
-
-        .activity-card .no-gps-badge {
-            background: #484f58;
-        }
-        /* ------------------------------------------------- */
     </style>
 </head>
 <body>
-    <div id="app">
-        <header class="header">
-            <h1>🚴‍♂️ Strava Add Overlay 🏃</h1>
-            <p>Adicione overlays de dados GPS aos seus vídeos</p>
-            
-            <!-- --- Status de Conexão --- -->
-            <div class="connection-status">
-                <div id="statusIndicator" class="status-indicator checking"></div>
-                <span id="connectionText">Verificando conexão com Strava...</span>
+
+    <div class="container">
+        <h1>Strava Video Overlay</h1>
+        
+        <!-- Seção de Autenticação -->
+        <div id="authSection">
+            <h2>Conexão com Strava</h2>
+            <button id="authBtn">Autenticar com Strava</button>
+            <div id="status" class="result-message"></div>
+        </div>
+
+        <!-- Seção de Atividades -->
+        <section id="activitiesSection" class="hidden">
+            <h2>Minhas Atividades</h2>
+            <div>
+                <input type="checkbox" id="filterGPS" checked>
+                <label for="filterGPS">Mostrar apenas atividades com GPS</label>
             </div>
-            <!-- -------------------------------------- -->
-        </header>
+            <div id="stats">
+                <span id="totalActivities"></span> | <span id="gpsActivities"></span>
+            </div>
+            <div id="activitiesGrid" class="activity-grid"></div>
+            <button id="loadMoreBtn" style="margin-top: 20px;">Carregar Mais</button>
+        </section>
 
-        <main class="container">
-            <!-- Seção de Autenticação -->
-            <section id="authSection" class="auth-section">
-                <h2>Conectar ao Strava</h2>
-                
-                <!-- --- Informação sobre conexão automática --- -->
-                <div id="autoConnectInfo" class="auto-connect-info">
-                    <h4>🔄 Conexão Automática</h4>
-                    <p>A aplicação tentará se conectar automaticamente ao Strava usando suas credenciais salvas. 
-                    Se não for possível, será solicitada uma nova autenticação.</p>
-                </div>
-                <!-- -------------------------------------------------- -->
-                
-                <button id="authBtn" class="btn-primary" style="display: none;">Autenticar com Strava</button>
-                <div id="authStatus"></div>
-                
-                <!-- --- Loading de verificação --- -->
-                <div id="authLoading" class="auth-loading">
-                    <div class="spinner"></div>
-                    <span>Verificando credenciais salvas...</span>
-                </div>
-                <!-- ------------------------------------ -->
-            </section>
+        <!-- Seção de Detalhes da Atividade e Mapa -->
+        <section id="activityDetail" class="hidden">
+            <h2>Detalhes da Atividade</h2>
+            <div id="activityInfo"></div>
+            <div id="mapContainer"></div>
+        </section>
 
-            <!-- Lista de Atividades com Paginação -->
-            <section id="activitiesSection" class="activities-section hidden">
-                <div class="activities-header">
-                    <h2>Suas Atividades</h2>
-                    <div class="activities-info">
-                        <span id="totalActivities">0 atividades carregadas</span>
-                        <span id="gpsActivities">0 com GPS</span>
+        <!-- Seção de Processamento de Vídeo -->
+        <section id="videoSection" class="hidden">
+            <h2>Processar Vídeo com Overlay</h2>
+            <button id="selectVideoBtn">Selecionar Vídeo</button>
+            <div id="videoInfo"></div>
+            <button id="processBtn" disabled>Processar com Overlay</button>
+            <div id="progress" class="hidden" style="margin-top: 15px;">
+                <div id="progressBarContainer" style="background-color: var(--border-color); border-radius: 5px;">
+                    <div id="progressBar" style="width: 0%; height: 20px; background-color: var(--button-bg); border-radius: 5px; text-align: center; color: white; line-height: 20px; transition: width 0.3s ease-in-out;">
+                       <span id="progressText">0%</span>
                     </div>
                 </div>
-                
-                <!-- Filtros -->
-                <div class="filter-controls">
-                    <label>
-                        <input type="checkbox" id="filterGPS" checked>
-                        Mostrar apenas atividades com GPS
-                    </label>
-                </div>
-                
-                <!-- Grid de Atividades -->
-                <div id="activitiesGrid" class="activities-grid"></div>
-                
-                <!-- Controles de Paginação -->
-                <div id="paginationControls" class="pagination-controls" style="display: none;">
-                    <button id="prevPageBtn" class="pagination-btn" disabled>← Anterior</button>
-                    <span class="pagination-info">
-                        Página <span id="currentPage">1</span>
-                    </span>
-                    <button id="nextPageBtn" class="pagination-btn">Próxima →</button>
-                </div>
-                
-                <!-- Botão Carregar Mais -->
-                <button id="loadMoreBtn" class="load-more-btn" style="display: none;">
-                    <span id="loadMoreText">Carregar Mais Atividades</span>
-                </button>
-            </section>
-
-            <!-- Detalhes da Atividade -->
-            <section id="activityDetail" class="activity-detail hidden">
-                <h2>Detalhes da Atividade</h2>
-                <div id="activityInfo"></div>
-                <div id="mapContainer" class="map-container">
-                    <div class="map-loading">
-                        <div class="spinner"></div>
-                        Carregando mapa...
-                    </div>
-                </div>
-            </section>
-
-            <!-- Upload de Vídeo -->
-            <section id="videoSection" class="video-section hidden">
-                <h2>Processar Vídeo</h2>
-                <p class="sync-instruction">Após selecionar o vídeo, clique no trajeto no mapa para ajustar o ponto de início da sincronização.</p>
-                <button id="selectVideoBtn" class="btn-primary">Selecionar Vídeo</button>
-                
-                <div id="videoInfo"></div>
-                <button id="processBtn" class="btn-primary" disabled>
-                    Processar com Overlay
-                </button>
-                <div id="progress" class="progress hidden">
-                    <div id="progressBar" class="progress-bar"></div>
-                    <span id="progressText">0%</span>
-                </div>
-                <div id="result"></div>
-            </section>
-        </main>
+            </div>
+            <div id="result" class="result-message"></div>
+        </section>
     </div>
 
-    <!-- Scripts carregados de forma otimizada -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
-            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
-            crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/polyline-encoded@0.0.9/Polyline.encoded.js"></script>
-    <script>
-        // Configuração global do Leaflet para cache de tiles
-        L.tileLayer.prototype._originalCreateTile = L.tileLayer.prototype._createTile;
-        L.tileLayer.prototype._createTile = function(coords, done) {
-            const tile = this._originalCreateTile(coords, done);
-            // Cache tiles por 24 horas
-            if (tile.src && !tile.src.includes('cache-control')) {
-                tile.crossOrigin = 'anonymous';
-            }
-            return tile;
-        };
-    </script>
-    <script src="main.js"></script>
+    <!-- Scripts Modulares -->
+    <script src="js/globals.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/activities.js"></script>
+    <script src="js/map.js"></script>
+    <script src="js/video.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>
+
