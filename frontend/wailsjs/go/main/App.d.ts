@@ -9,6 +9,8 @@ export function CheckAuthenticationStatus():Promise<main.AuthStatus>;
 
 export function GetActivities():Promise<Array<main.FrontendActivity>>;
 
+export function GetActivitiesPage(arg1:number):Promise<main.PaginatedActivities>;
+
 export function GetActivityDetail(arg1:number):Promise<strava.ActivityDetail>;
 
 export function GetAllGPSPoints(arg1:number):Promise<Array<main.FrontendGPSPoint>>;

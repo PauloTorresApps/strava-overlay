@@ -14,6 +14,10 @@ export function GetActivities() {
   return window['go']['main']['App']['GetActivities']();
 }
 
+export function GetActivitiesPage(arg1) {
+  return window['go']['main']['App']['GetActivitiesPage'](arg1);
+}
+
 export function GetActivityDetail(arg1) {
   return window['go']['main']['App']['GetActivityDetail'](arg1);
 }

@@ -27,6 +27,7 @@ export namespace main {
 	    start_latlng: number[];
 	    end_latlng: number[];
 	    map: strava.Map;
+	    has_gps: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new FrontendActivity(source);
@@ -44,6 +45,7 @@ export namespace main {
 	        this.start_latlng = source["start_latlng"];
 	        this.end_latlng = source["end_latlng"];
 	        this.map = this.convertValues(source["map"], strava.Map);
+	        this.has_gps = source["has_gps"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -87,6 +89,44 @@ export namespace main {
 	        this.bearing = source["bearing"];
 	        this.gForce = source["gForce"];
 	    }
+	}
+	export class PaginatedActivities {
+	    activities: FrontendActivity[];
+	    page: number;
+	    per_page: number;
+	    has_more: boolean;
+	    total_loaded: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PaginatedActivities(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.activities = this.convertValues(source["activities"], FrontendActivity);
+	        this.page = source["page"];
+	        this.per_page = source["per_page"];
+	        this.has_more = source["has_more"];
+	        this.total_loaded = source["total_loaded"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }

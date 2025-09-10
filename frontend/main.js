@@ -5,14 +5,21 @@ let selectedActivity = null;
 let activityMap = null;
 let videoStartMarker = null;
 let selectedVideoPath = "";
-let tileCache = new Map(); // Cache de tiles
-let mapBounds = null; // Cache dos bounds da atividade
-let manualSyncTime = ""; // Armazena o tempo de início selecionado manualmente
-let activityPolyline = null; // Referência à linha do trajeto no mapa
+let tileCache = new Map();
+let mapBounds = null;
+let manualSyncTime = "";
+let activityPolyline = null;
 let currentMarkerDensity = 'medium';
 let currentGPSMarkersGroup = null;
 
-// --- NOVAS VARIÁVEIS PARA CONTROLE DE AUTENTICAÇÃO ---
+// --- VARIÁVEIS PARA PAGINAÇÃO ---
+let allActivities = []; // Todas as atividades carregadas
+let currentPage = 1;
+let isLoadingMore = false;
+let hasMorePages = true;
+let showOnlyGPS = true; // Filtro para mostrar apenas atividades com GPS
+
+// --- VARIÁVEIS PARA CONTROLE DE AUTENTICAÇÃO ---
 let isAuthenticated = false;
 let isCheckingAuth = false;
 
@@ -21,6 +28,8 @@ let authBtn, authStatus, activitiesSection, activitiesGrid;
 let activityDetail, activityInfo, mapContainer, videoSection;
 let selectVideoBtn, videoInfo, processBtn, progress;
 let progressBar, progressText, result;
+let loadMoreBtn, prevPageBtn, nextPageBtn, currentPageSpan;
+let totalActivitiesSpan, gpsActivitiesSpan, filterGPSCheckbox;
 
 // Event listeners
 document.addEventListener('DOMContentLoaded', function() {
@@ -47,24 +56,39 @@ function initializeElements() {
     progressText = document.getElementById('progressText');
     result = document.getElementById('result');
     
+    // Elementos de paginação
+    loadMoreBtn = document.getElementById('loadMoreBtn');
+    prevPageBtn = document.getElementById('prevPageBtn');
+    nextPageBtn = document.getElementById('nextPageBtn');
+    currentPageSpan = document.getElementById('currentPage');
+    totalActivitiesSpan = document.getElementById('totalActivities');
+    gpsActivitiesSpan = document.getElementById('gpsActivities');
+    filterGPSCheckbox = document.getElementById('filterGPS');
+    
     // Adiciona event listeners de forma segura
     if (authBtn) authBtn.addEventListener('click', authenticateStrava);
     if (selectVideoBtn) selectVideoBtn.addEventListener('click', selectVideo);
     if (processBtn) processBtn.addEventListener('click', processVideo);
     
+    // Event listeners para paginação
+    if (loadMoreBtn) loadMoreBtn.addEventListener('click', loadMoreActivities);
+    if (prevPageBtn) prevPageBtn.addEventListener('click', () => changePage(-1));
+    if (nextPageBtn) nextPageBtn.addEventListener('click', () => changePage(1));
+    if (filterGPSCheckbox) filterGPSCheckbox.addEventListener('change', handleFilterChange);
+    
     console.log('✅ Elementos DOM inicializados');
 }
 
-// --- FUNÇÃO PRINCIPAL MODIFICADA PARA AUTENTICAÇÃO AUTOMÁTICA ---
+// --- FUNÇÃO PRINCIPAL ---
 async function initApp() {
     console.log('🚀 Strava Add Overlay iniciado');
     preloadMapResources();
     
-    // NOVA LÓGICA: Verifica autenticação automaticamente na inicialização
+    // Verifica autenticação automaticamente na inicialização
     setTimeout(checkAuthenticationOnStartup, 500);
 }
 
-// --- NOVA FUNÇÃO: Verifica autenticação na inicialização (CORRIGIDA) ---
+// --- VERIFICAÇÃO DE AUTENTICAÇÃO NA INICIALIZAÇÃO ---
 async function checkAuthenticationOnStartup() {
     if (isCheckingAuth) {
         console.log('⏳ Já verificando autenticação...');
@@ -118,8 +142,8 @@ function handleAuthSuccess(response) {
         authBtn.style.display = 'none';
     }
     
-    // Carrega atividades sem await para evitar recursão
-    loadActivitiesSafe();
+    // Carrega primeira página de atividades
+    loadActivitiesPage(1);
 }
 
 function handleAuthFailure(error) {
@@ -150,32 +174,223 @@ function handleAuthError(error) {
     }
 }
 
-// CARREGAMENTO DE ATIVIDADES - VERSÃO SEGURA
-function loadActivitiesSafe() {
-    console.log('📋 Iniciando carregamento de atividades...');
+// --- NOVA FUNÇÃO: Carrega uma página específica de atividades ---
+async function loadActivitiesPage(page) {
+    if (isLoadingMore) {
+        console.log('⏳ Já carregando atividades...');
+        return;
+    }
     
-    safeUpdateStatus('connected', 'Carregando atividades...');
-    safeShowMessage('Carregando suas atividades...', 'info');
+    console.log(`📋 Carregando página ${page} de atividades...`);
+    isLoadingMore = true;
     
-    window.go.main.App.GetActivities()
-        .then(activities => {
-            console.log(`📋 ${activities?.length || 0} atividades recebidas`);
-            displayActivities(activities);
-            
-            if (activitiesSection) {
-                activitiesSection.classList.remove('hidden');
+    try {
+        // Atualiza UI
+        safeUpdateStatus('connected', `Carregando página ${page}...`);
+        updateLoadMoreButton(true);
+        
+        // Chama a API com paginação
+        const response = await window.go.main.App.GetActivitiesPage(page);
+        
+        if (!response) {
+            throw new Error('Resposta vazia do servidor');
+        }
+        
+        console.log(`📋 Página ${page}: ${response.activities?.length || 0} atividades recebidas`);
+        
+        // Atualiza variáveis globais
+        currentPage = page;
+        hasMorePages = response.has_more;
+        
+        // Se for a primeira página, limpa a lista
+        if (page === 1) {
+            allActivities = [];
+        }
+        
+        // Adiciona novas atividades à lista
+        if (response.activities && response.activities.length > 0) {
+            allActivities = allActivities.concat(response.activities);
+        }
+        
+        // Atualiza a exibição
+        displayActivities(getFilteredActivities());
+        updatePaginationControls();
+        updateStatistics();
+        
+        // Mostra a seção de atividades
+        if (activitiesSection) {
+            activitiesSection.classList.remove('hidden');
+        }
+        
+        // Atualiza status
+        const totalGPS = allActivities.filter(a => a.has_gps).length;
+        safeUpdateStatus('connected', `${allActivities.length} atividades carregadas`);
+        
+        // Limpa mensagem após um tempo
+        setTimeout(() => safeShowMessage('', ''), 3000);
+        
+    } catch (error) {
+        console.error('❌ Erro ao carregar atividades:', error);
+        safeUpdateStatus('error', 'Erro ao carregar atividades');
+        safeShowMessage(`Erro: ${error}`, 'error');
+    } finally {
+        isLoadingMore = false;
+        updateLoadMoreButton(false);
+    }
+}
+
+// --- NOVA FUNÇÃO: Carrega mais atividades (próxima página) ---
+async function loadMoreActivities() {
+    if (!hasMorePages || isLoadingMore) {
+        return;
+    }
+    
+    await loadActivitiesPage(currentPage + 1);
+}
+
+// --- NOVA FUNÇÃO: Muda de página ---
+async function changePage(direction) {
+    const newPage = currentPage + direction;
+    if (newPage < 1) return;
+    
+    await loadActivitiesPage(newPage);
+}
+
+// --- NOVA FUNÇÃO: Filtra atividades baseado nas configurações ---
+function getFilteredActivities() {
+    if (!showOnlyGPS) {
+        return allActivities;
+    }
+    
+    return allActivities.filter(activity => activity.has_gps);
+}
+
+// --- NOVA FUNÇÃO: Lida com mudança no filtro ---
+function handleFilterChange(event) {
+    showOnlyGPS = event.target.checked;
+    displayActivities(getFilteredActivities());
+    updateStatistics();
+}
+
+// --- NOVA FUNÇÃO: Atualiza estatísticas ---
+function updateStatistics() {
+    const totalCount = allActivities.length;
+    const gpsCount = allActivities.filter(a => a.has_gps).length;
+    
+    if (totalActivitiesSpan) {
+        totalActivitiesSpan.textContent = `${totalCount} atividades carregadas`;
+    }
+    
+    if (gpsActivitiesSpan) {
+        gpsActivitiesSpan.textContent = `${gpsCount} com GPS`;
+    }
+}
+
+// --- NOVA FUNÇÃO: Atualiza controles de paginação ---
+function updatePaginationControls() {
+    // Mostra ou esconde o botão "Carregar Mais"
+    if (loadMoreBtn) {
+        loadMoreBtn.style.display = hasMorePages ? 'block' : 'none';
+    }
+    
+    // Atualiza controles de página (se você quiser usar navegação por páginas)
+    const paginationControls = document.getElementById('paginationControls');
+    if (paginationControls) {
+        // Por enquanto, vamos manter oculto e usar apenas "Carregar Mais"
+        paginationControls.style.display = 'none';
+    }
+    
+    if (currentPageSpan) {
+        currentPageSpan.textContent = currentPage;
+    }
+    
+    if (prevPageBtn) {
+        prevPageBtn.disabled = currentPage <= 1;
+    }
+    
+    if (nextPageBtn) {
+        nextPageBtn.disabled = !hasMorePages;
+    }
+}
+
+// --- NOVA FUNÇÃO: Atualiza botão "Carregar Mais" ---
+function updateLoadMoreButton(isLoading) {
+    if (!loadMoreBtn) return;
+    
+    const loadMoreText = document.getElementById('loadMoreText');
+    
+    if (isLoading) {
+        loadMoreBtn.disabled = true;
+        if (loadMoreText) {
+            loadMoreText.innerHTML = '<div class="loading-more"><div class="spinner"></div>Carregando...</div>';
+        }
+    } else {
+        loadMoreBtn.disabled = !hasMorePages;
+        if (loadMoreText) {
+            if (hasMorePages) {
+                loadMoreText.textContent = 'Carregar Mais Atividades';
+            } else {
+                loadMoreText.textContent = 'Todas as atividades foram carregadas';
             }
-            
-            safeUpdateStatus('connected', `${activities?.length || 0} atividades carregadas`);
-            safeShowMessage(`✅ ${activities?.length || 0} atividades carregadas!`, 'success');
-            
-            setTimeout(() => safeShowMessage('', ''), 3000);
-        })
-        .catch(error => {
-            console.error('❌ Erro ao carregar atividades:', error);
-            safeUpdateStatus('error', 'Erro ao carregar atividades');
-            safeShowMessage(`Erro: ${error}`, 'error');
-        });
+        }
+    }
+}
+
+// --- FUNÇÃO MODIFICADA: Exibe atividades com indicador de GPS ---
+function displayActivities(activities) {
+    if (!activitiesGrid) return;
+    
+    activitiesGrid.innerHTML = '';
+    
+    if (!activities || activities.length === 0) {
+        activitiesGrid.innerHTML = '<p>Nenhuma atividade encontrada com os filtros aplicados.</p>';
+        return;
+    }
+    
+    activities.forEach(activity => {
+        const card = createActivityCard(activity);
+        activitiesGrid.appendChild(card);
+    });
+}
+
+// --- FUNÇÃO MODIFICADA: Cria card com indicador de GPS ---
+function createActivityCard(activity) {
+    const card = document.createElement('div');
+    card.className = 'activity-card';
+    
+    // Adiciona classe especial para atividades sem GPS
+    if (!activity.has_gps) {
+        card.className += ' no-gps';
+    }
+    
+    // Só permite seleção se tiver GPS
+    if (activity.has_gps) {
+        card.onclick = () => selectActivity(activity, card);
+    } else {
+        card.style.cursor = 'not-allowed';
+        card.title = 'Esta atividade não possui dados GPS';
+    }
+    
+    const date = formatDate(new Date(activity.start_date));
+    const distance = (activity.distance / 1000).toFixed(2);
+    const duration = formatDuration(activity.moving_time);
+    const maxSpeed = activity.max_speed ? (activity.max_speed * 3.6).toFixed(1) : 'N/A';
+    
+    // Badge de GPS
+    const gpsBadge = activity.has_gps 
+        ? '<span class="gps-badge">GPS</span>' 
+        : '<span class="gps-badge no-gps-badge">Sem GPS</span>';
+    
+    card.innerHTML = `
+        <h3>${activity.name} ${gpsBadge}</h3>
+        <p><strong>Tipo:</strong> ${translateActivityType(activity.type)}</p>
+        <p><strong>Data:</strong> ${date}</p>
+        <p><strong>Distância:</strong> ${distance} km</p>
+        <p><strong>Duração:</strong> ${duration}</p>
+        ${activity.has_gps ? `<p><strong>Vel. Máx:</strong> ${maxSpeed} km/h</p>` : ''}
+    `;
+    
+    return card;
 }
 
 // FUNÇÕES AUXILIARES SEGURAS
@@ -235,7 +450,7 @@ function preloadMapResources() {
     });
 }
 
-// --- FUNÇÃO DE AUTENTICAÇÃO MANUAL MODIFICADA ---
+// --- FUNÇÃO DE AUTENTICAÇÃO MANUAL ---
 async function authenticateStrava() {
     if (isCheckingAuth) {
         console.log('⏳ Verificação em andamento...');
@@ -262,7 +477,7 @@ async function authenticateStrava() {
         }
         
         console.log('📋 Carregando atividades após autenticação manual...');
-        loadActivitiesSafe();
+        loadActivitiesPage(1);
         
     } catch (error) {
         console.error('❌ Erro na autenticação:', error);
@@ -277,44 +492,7 @@ async function authenticateStrava() {
     }
 }
 
-function displayActivities(activities) {
-    if (!activitiesGrid) return;
-    
-    activitiesGrid.innerHTML = '';
-    
-    if (!activities || activities.length === 0) {
-        activitiesGrid.innerHTML = '<p>Nenhuma atividade com GPS encontrada.</p>';
-        return;
-    }
-    
-    activities.forEach(activity => {
-        const card = createActivityCard(activity);
-        activitiesGrid.appendChild(card);
-    });
-}
-
-function createActivityCard(activity) {
-    const card = document.createElement('div');
-    card.className = 'activity-card';
-    card.onclick = () => selectActivity(activity, card);
-    
-    const date = formatDate(new Date(activity.start_date));
-    const distance = (activity.distance / 1000).toFixed(2);
-    const duration = formatDuration(activity.moving_time);
-    const maxSpeed = activity.max_speed ? (activity.max_speed * 3.6).toFixed(1) : 'N/A';
-    
-    card.innerHTML = `
-        <h3>${activity.name}</h3>
-        <p><strong>Tipo:</strong> ${translateActivityType(activity.type)}</p>
-        <p><strong>Data:</strong> ${date}</p>
-        <p><strong>Distância:</strong> ${distance} km</p>
-        <p><strong>Duração:</strong> ${duration}</p>
-        <p><strong>Vel. Máx:</strong> ${maxSpeed} km/h</p>
-    `;
-    
-    return card;
-}
-
+// Função para selecionar uma atividade
 async function selectActivity(activity, cardElement) {
     try {
         document.querySelectorAll('.activity-card.selected').forEach(el => {
@@ -336,6 +514,7 @@ async function selectActivity(activity, cardElement) {
     }
 }
 
+// Exibe detalhes da atividade
 function displayActivityDetail(detail) {
     if (!activityInfo) return;
     
@@ -373,7 +552,7 @@ function displayActivityDetail(detail) {
 }
 
 // ========================================
-// FUNÇÕES DE MAPA COMPLETAS
+// FUNÇÕES DE MAPA
 // ========================================
 
 async function displayMap(activity) {
@@ -397,7 +576,7 @@ async function displayMap(activity) {
 
         console.log("Mapa inicializado, carregando dados GPS...");
 
-        // NOVA ABORDAGEM: Carrega dados GPS interpolados primeiro
+        // Carrega dados GPS interpolados primeiro
         await loadInterpolatedTrajectory(activity);
         
     } catch (error) {
@@ -467,7 +646,126 @@ async function loadInterpolatedTrajectory(activity) {
     }
 }
 
-// NOVA FUNÇÃO: Controles avançados com densidade de marcadores
+// Função para criar trajeto com gradiente de velocidade
+async function createSpeedGradientTrajectory(fullTrajectoryPoints) {
+    console.log(`🎨 Criando trajeto colorido com ${fullTrajectoryPoints.length} pontos...`);
+    
+    // Cria um trajeto único com todos os pontos, colorido pela velocidade média
+    const allLatLngs = fullTrajectoryPoints.map(p => [p.lat, p.lng]);
+    const avgSpeed = fullTrajectoryPoints.reduce((sum, p) => sum + (p.velocity * 3.6), 0) / fullTrajectoryPoints.length;
+    
+    activityPolyline = L.polyline(allLatLngs, {
+        color: getSpeedColor(avgSpeed),
+        weight: 4,
+        opacity: 0.8,
+        smoothFactor: 1.0
+    }).addTo(activityMap);
+
+    // Handler de clique para sincronização
+    activityPolyline.on('click', (e) => handleTrajectoryClickOptimized(e, fullTrajectoryPoints));
+
+    activityPolyline.bindPopup(`
+        <div style="font-size: 12px;">
+            <strong>📊 Trajeto Completo</strong><br>
+            🏃 Velocidade média: ${avgSpeed.toFixed(1)} km/h<br>
+            📏 ${fullTrajectoryPoints.length} pontos GPS<br>
+            ⏱️ ${new Date(fullTrajectoryPoints[0].time).toLocaleTimeString('pt-BR')} - 
+                 ${new Date(fullTrajectoryPoints[fullTrajectoryPoints.length-1].time).toLocaleTimeString('pt-BR')}
+        </div>
+    `);
+
+    console.log(`✅ Trajeto principal criado (${allLatLngs.length} coordenadas)`);
+}
+
+// Handler de clique otimizado para trajeto completo
+async function handleTrajectoryClickOptimized(e, fullTrajectoryPoints) {
+    console.log("🖱️ Clique no trajeto detectado, buscando ponto mais próximo...");
+    
+    const clickLatLng = e.latlng;
+    let closestPoint = null;
+    let minDistance = Infinity;
+    
+    // Busca otimizada
+    if (fullTrajectoryPoints.length > 1000) {
+        // Para trajetos grandes, faz amostragem primeiro
+        const sampleStep = Math.ceil(fullTrajectoryPoints.length / 200);
+        const sampledPoints = fullTrajectoryPoints.filter((_, index) => index % sampleStep === 0);
+        
+        // Encontra região aproximada
+        sampledPoints.forEach(point => {
+            const distance = clickLatLng.distanceTo([point.lat, point.lng]);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestPoint = point;
+            }
+        });
+        
+        // Refina busca na região próxima
+        const closestIndex = fullTrajectoryPoints.findIndex(p => p.time === closestPoint.time);
+        const searchRange = Math.min(100, Math.floor(fullTrajectoryPoints.length / 20));
+        const startIdx = Math.max(0, closestIndex - searchRange);
+        const endIdx = Math.min(fullTrajectoryPoints.length - 1, closestIndex + searchRange);
+        
+        minDistance = Infinity;
+        for (let i = startIdx; i <= endIdx; i++) {
+            const point = fullTrajectoryPoints[i];
+            const distance = clickLatLng.distanceTo([point.lat, point.lng]);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestPoint = point;
+            }
+        }
+    } else {
+        // Para trajetos menores, busca linear simples
+        fullTrajectoryPoints.forEach(point => {
+            const distance = clickLatLng.distanceTo([point.lat, point.lng]);
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestPoint = point;
+            }
+        });
+    }
+    
+    if (closestPoint) {
+        console.log(`✅ Ponto mais próximo: ${closestPoint.time} (${minDistance.toFixed(2)}m de distância)`);
+        manualSyncTime = closestPoint.time;
+        updateVideoStartMarker(closestPoint.lat, closestPoint.lng, '▶️ Início Manual do Vídeo');
+        
+        const timeStr = new Date(closestPoint.time).toLocaleTimeString('pt-BR');
+        const speedStr = (closestPoint.velocity * 3.6).toFixed(1);
+        showMessage(result, `🎯 Sincronização: ${timeStr} (${speedStr} km/h)`, 'success');
+    }
+}
+
+// Funções auxiliares do mapa
+function getSpeedColor(speedKmh) {
+    if (speedKmh > 40) return '#dc3545'; // Vermelho - muito rápido
+    if (speedKmh > 25) return '#fd7e14'; // Laranja - rápido  
+    if (speedKmh > 15) return '#ffc107'; // Amarelo - moderado
+    if (speedKmh > 8) return '#28a745';  // Verde - lento
+    return '#6c757d'; // Cinza - muito lento/parado
+}
+
+function createCustomIcon(emoji, color) {
+    return L.divIcon({
+        html: `<div style="
+            background-color: ${color}; 
+            border-radius: 50%; 
+            width: 30px; 
+            height: 30px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 14px;
+            border: 2px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        ">${emoji}</div>`,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+    });
+}
+
+// Adiciona controles avançados com densidade de marcadores
 function addAdvancedTrajectoryControls(activityId) {
     // Controle de densidade dos marcadores
     const densityControl = L.control({ position: 'topright' });
@@ -545,409 +843,7 @@ function addAdvancedTrajectoryControls(activityId) {
     addTrajectoryControls();
 }
 
-async function createSpeedGradientTrajectory(fullTrajectoryPoints) {
-    console.log(`🎨 Criando trajeto colorido com ${fullTrajectoryPoints.length} pontos...`);
-    
-    // ======================================
-    // OPÇÃO 1: Trajeto simples mas completo (RECOMENDADO)
-    // ======================================
-    
-    // Cria um trajeto único com todos os pontos, colorido pela velocidade média
-    const allLatLngs = fullTrajectoryPoints.map(p => [p.lat, p.lng]);
-    const avgSpeed = fullTrajectoryPoints.reduce((sum, p) => sum + (p.velocity * 3.6), 0) / fullTrajectoryPoints.length;
-    
-    activityPolyline = L.polyline(allLatLngs, {
-        color: getSpeedColor(avgSpeed),
-        weight: 4,
-        opacity: 0.8,
-        smoothFactor: 1.0
-    }).addTo(activityMap);
-
-    // Handler de clique para sincronização (mais eficiente)
-    activityPolyline.on('click', (e) => handleTrajectoryClickOptimized(e, fullTrajectoryPoints));
-
-    activityPolyline.bindPopup(`
-        <div style="font-size: 12px;">
-            <strong>📊 Trajeto Completo</strong><br>
-            🏃 Velocidade média: ${avgSpeed.toFixed(1)} km/h<br>
-            📏 ${fullTrajectoryPoints.length} pontos GPS<br>
-            ⏱️ ${new Date(fullTrajectoryPoints[0].time).toLocaleTimeString('pt-BR')} - 
-                 ${new Date(fullTrajectoryPoints[fullTrajectoryPoints.length-1].time).toLocaleTimeString('pt-BR')}
-        </div>
-    `);
-
-    console.log(`✅ Trajeto principal criado (${allLatLngs.length} coordenadas)`);
-}
-
-// FUNÇÃO AUXILIAR: Agrupa pontos por velocidade similar
-function groupPointsBySpeed(points, speedThreshold = 5) {
-    const segments = [];
-    let currentSegment = { points: [points[0]], speeds: [points[0].velocity * 3.6] };
-    
-    for (let i = 1; i < points.length; i++) {
-        const currentSpeed = points[i].velocity * 3.6;
-        const avgSegmentSpeed = currentSegment.speeds.reduce((a, b) => a + b, 0) / currentSegment.speeds.length;
-        
-        // Se a velocidade mudou significativamente, inicia novo segmento
-        if (Math.abs(currentSpeed - avgSegmentSpeed) > speedThreshold && currentSegment.points.length > 5) {
-            currentSegment.avgSpeed = avgSegmentSpeed;
-            segments.push(currentSegment);
-            currentSegment = { points: [points[i]], speeds: [currentSpeed] };
-        } else {
-            currentSegment.points.push(points[i]);
-            currentSegment.speeds.push(currentSpeed);
-        }
-    }
-    
-    // Adiciona o último segmento
-    if (currentSegment.points.length > 0) {
-        currentSegment.avgSpeed = currentSegment.speeds.reduce((a, b) => a + b, 0) / currentSegment.speeds.length;
-        segments.push(currentSegment);
-    }
-    
-    console.log(`Trajeto dividido em ${segments.length} segmentos por velocidade`);
-    return segments;
-}
-
-// FUNÇÃO AUXILIAR: Cor baseada na velocidade
-function getSpeedColor(speedKmh) {
-    if (speedKmh > 40) return '#dc3545'; // Vermelho - muito rápido
-    if (speedKmh > 25) return '#fd7e14'; // Laranja - rápido  
-    if (speedKmh > 15) return '#ffc107'; // Amarelo - moderado
-    if (speedKmh > 8) return '#28a745';  // Verde - lento
-    return '#6c757d'; // Cinza - muito lento/parado
-}
-
-// FUNÇÃO AUXILIAR: Espessura baseada na velocidade
-function getSpeedWeight(speedKmh) {
-    if (speedKmh > 30) return 5;
-    if (speedKmh > 15) return 4;  
-    if (speedKmh > 5) return 3;
-    return 2;
-}
-
-// FUNÇÃO AUXILIAR: Handler de clique no trajeto
-async function handleTrajectoryClick(e, segmentPoints) {
-    // Encontra o ponto mais próximo do clique dentro do segmento
-    const clickLatLng = e.latlng;
-    let closestPoint = null;
-    let minDistance = Infinity;
-    
-    segmentPoints.forEach(point => {
-        const distance = clickLatLng.distanceTo([point.lat, point.lng]);
-        if (distance < minDistance) {
-            minDistance = distance;
-            closestPoint = point;
-        }
-    });
-    
-    if (closestPoint) {
-        console.log(`Clique no trajeto - ponto selecionado: ${closestPoint.time}`);
-        manualSyncTime = closestPoint.time;
-        updateVideoStartMarker(closestPoint.lat, closestPoint.lng, '▶️ Início Manual do Vídeo');
-        showMessage(result, `Sincronização ajustada para ${new Date(closestPoint.time).toLocaleTimeString('pt-BR')}`, 'success');
-    }
-}
-
-// NOVA FUNÇÃO: Handler de clique otimizado para trajeto completo
-async function handleTrajectoryClickOptimized(e, fullTrajectoryPoints) {
-    console.log("🖱️ Clique no trajeto detectado, buscando ponto mais próximo...");
-    
-    const clickLatLng = e.latlng;
-    let closestPoint = null;
-    let minDistance = Infinity;
-    
-    // Busca binária otimizada ou busca linear (dependendo do tamanho)
-    if (fullTrajectoryPoints.length > 1000) {
-        // Para trajetos grandes, faz amostragem primeiro
-        const sampleStep = Math.ceil(fullTrajectoryPoints.length / 200);
-        const sampledPoints = fullTrajectoryPoints.filter((_, index) => index % sampleStep === 0);
-        
-        // Encontra região aproximada
-        sampledPoints.forEach(point => {
-            const distance = clickLatLng.distanceTo([point.lat, point.lng]);
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestPoint = point;
-            }
-        });
-        
-        // Refina busca na região próxima
-        const closestIndex = fullTrajectoryPoints.findIndex(p => p.time === closestPoint.time);
-        const searchRange = Math.min(100, Math.floor(fullTrajectoryPoints.length / 20));
-        const startIdx = Math.max(0, closestIndex - searchRange);
-        const endIdx = Math.min(fullTrajectoryPoints.length - 1, closestIndex + searchRange);
-        
-        minDistance = Infinity;
-        for (let i = startIdx; i <= endIdx; i++) {
-            const point = fullTrajectoryPoints[i];
-            const distance = clickLatLng.distanceTo([point.lat, point.lng]);
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestPoint = point;
-            }
-        }
-    } else {
-        // Para trajetos menores, busca linear simples
-        fullTrajectoryPoints.forEach(point => {
-            const distance = clickLatLng.distanceTo([point.lat, point.lng]);
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestPoint = point;
-            }
-        });
-    }
-    
-    if (closestPoint) {
-        console.log(`✅ Ponto mais próximo: ${closestPoint.time} (${minDistance.toFixed(2)}m de distância)`);
-        manualSyncTime = closestPoint.time;
-        updateVideoStartMarker(closestPoint.lat, closestPoint.lng, '▶️ Início Manual do Vídeo');
-        
-        const timeStr = new Date(closestPoint.time).toLocaleTimeString('pt-BR');
-        const speedStr = (closestPoint.velocity * 3.6).toFixed(1);
-        showMessage(result, `🎯 Sincronização: ${timeStr} (${speedStr} km/h)`, 'success');
-    }
-}
-
-// Função para marcadores agora usa dados já filtrados
-function addSelectiveGPSMarkers(filteredGPSPoints) {
-    console.log(`📍 Adicionando ${filteredGPSPoints.length} marcadores seletivos...`);
-    
-    const gpsMarkersGroup = L.layerGroup();
-    
-    filteredGPSPoints.forEach((point, index) => {
-        const speed = point.velocity * 3.6;
-        const color = getSpeedColor(speed);
-        
-        const marker = L.circleMarker([point.lat, point.lng], {
-            radius: 4, // Aumentei um pouco para ficar mais visível
-            fillColor: color,
-            fillOpacity: 0.8,
-            color: '#ffffff',
-            weight: 1.5,
-            opacity: 1
-        });
-        
-        // Popup com informações do ponto
-        const time = new Date(point.time).toLocaleTimeString('pt-BR');
-        marker.bindPopup(`
-            <div style="font-size: 12px;">
-                <strong>📍 Ponto ${index + 1}</strong><br>
-                <strong>⏰ ${time}</strong><br>
-                🏃 Velocidade: ${speed.toFixed(1)} km/h<br>
-                ⛰️ Altitude: ${point.altitude.toFixed(0)}m<br>
-                🧭 Direção: ${point.bearing.toFixed(0)}°<br>
-                📍 ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}
-            </div>
-        `);
-
-        // Tooltip que aparece no hover (sem precisar clicar)
-        marker.bindTooltip(`${time} • ${speed.toFixed(1)} km/h`, {
-            permanent: false,
-            direction: 'top',
-            offset: [0, -10]
-        });
-        
-        gpsMarkersGroup.addLayer(marker);
-    });
-    
-    // CORREÇÃO PRINCIPAL: Adiciona os marcadores ANTES de criar o controle
-    gpsMarkersGroup.addTo(activityMap);
-    
-    // Controle de camadas - agora os marcadores estão HABILITADOS por padrão
-    const overlayMaps = {
-        "📍 Pontos GPS": gpsMarkersGroup
-    };
-    
-    const layerControl = L.control.layers(null, overlayMaps, { 
-        position: 'topright',
-        collapsed: false 
-    }).addTo(activityMap);
-    
-    console.log(`✅ ${filteredGPSPoints.length} marcadores GPS adicionados e VISÍVEIS`);
-    
-    // Adiciona informação visual sobre os marcadores
-    setTimeout(() => {
-        showMessage(result, `📍 ${filteredGPSPoints.length} marcadores GPS visíveis no mapa`, 'info');
-        setTimeout(() => showMessage(result, '', ''), 2000);
-    }, 1000);
-}
-
-// NOVA FUNÇÃO: Cria marcadores com diferentes tipos baseados na velocidade
-function addEnhancedGPSMarkers(filteredGPSPoints) {
-    console.log(`📍 Adicionando marcadores aprimorados...`);
-    
-    // Grupo para diferentes tipos de marcadores
-    const speedMarkersGroup = L.layerGroup();
-    const keyPointsGroup = L.layerGroup();
-    
-    filteredGPSPoints.forEach((point, index) => {
-        const speed = point.velocity * 3.6;
-        const color = getSpeedColor(speed);
-        const time = new Date(point.time);
-        
-        // Determina o tipo de marcador
-        let markerType = 'normal';
-        let radius = 4;
-        let weight = 1.5;
-        
-        // Marcadores especiais para pontos interessantes
-        if (speed > 35) {
-            markerType = 'fast';
-            radius = 6;
-            weight = 2;
-        } else if (speed < 3) {
-            markerType = 'stop';
-            radius = 5;
-            weight = 2;
-        } else if (index === 0 || index === filteredGPSPoints.length - 1) {
-            markerType = 'endpoint';
-            radius = 7;
-            weight = 2.5;
-        }
-        
-        const marker = L.circleMarker([point.lat, point.lng], {
-            radius: radius,
-            fillColor: color,
-            fillOpacity: markerType === 'normal' ? 0.7 : 0.9,
-            color: markerType === 'endpoint' ? '#000000' : '#ffffff',
-            weight: weight,
-            opacity: 1
-        });
-        
-        // Popup detalhado
-        const timeStr = time.toLocaleTimeString('pt-BR');
-        marker.bindPopup(`
-            <div style="font-size: 12px;">
-                <strong>📍 ${getMarkerTypeLabel(markerType)} ${index + 1}</strong><br>
-                <strong>⏰ ${timeStr}</strong><br>
-                🏃 ${speed.toFixed(1)} km/h<br>
-                ⛰️ ${point.altitude.toFixed(0)}m<br>
-                🧭 ${point.bearing.toFixed(0)}°<br>
-                <small>📍 ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}</small>
-                <hr style="margin: 5px 0;">
-                <small><em>Clique no trajeto próximo para sincronizar vídeo</em></small>
-            </div>
-        `);
-        
-        // Tooltip mais informativo
-        marker.bindTooltip(`${timeStr} • ${speed.toFixed(1)} km/h • ${point.altitude.toFixed(0)}m`, {
-            permanent: false,
-            direction: 'top',
-            offset: [0, -10],
-            className: 'custom-tooltip'
-        });
-        
-        // Adiciona ao grupo apropriado
-        if (markerType === 'endpoint' || markerType === 'fast' || markerType === 'stop') {
-            keyPointsGroup.addLayer(marker);
-        } else {
-            speedMarkersGroup.addLayer(marker);
-        }
-    });
-    
-    // Adiciona ambos os grupos ao mapa
-    speedMarkersGroup.addTo(activityMap);
-    keyPointsGroup.addTo(activityMap);
-    
-    // Controle de camadas com opções separadas
-    const overlayMaps = {
-        "📍 Pontos GPS": speedMarkersGroup,
-        "⭐ Pontos-Chave": keyPointsGroup
-    };
-    
-    L.control.layers(null, overlayMaps, { 
-        position: 'topright',
-        collapsed: false 
-    }).addTo(activityMap);
-    
-    console.log(`✅ Marcadores GPS criados: ${speedMarkersGroup.getLayers().length} normais + ${keyPointsGroup.getLayers().length} especiais`);
-    
-    // Feedback para o usuário
-    const totalMarkers = speedMarkersGroup.getLayers().length + keyPointsGroup.getLayers().length;
-    setTimeout(() => {
-        showMessage(result, `📍 ${totalMarkers} marcadores GPS carregados (${keyPointsGroup.getLayers().length} pontos-chave)`, 'success');
-        setTimeout(() => showMessage(result, '', ''), 3000);
-    }, 1000);
-}
-
-// FUNÇÃO AUXILIAR: Labels para tipos de marcadores
-function getMarkerTypeLabel(type) {
-    switch(type) {
-        case 'fast': return '🚀 Alta Velocidade';
-        case 'stop': return '🛑 Parada';
-        case 'endpoint': return '📍 Marco';
-        default: return '📍 Ponto GPS';
-    }
-}
-
-// FUNÇÃO AUXILIAR: Seleciona pontos-chave para marcadores
-function selectKeyPoints(points, intervalSeconds = 30) {
-    const keyPoints = [];
-    let lastTime = null;
-    let lastSpeed = null;
-    
-    points.forEach(point => {
-        const currentTime = new Date(point.time);
-        const currentSpeed = point.velocity * 3.6;
-        
-        // Critérios para ponto-chave:
-        // 1. Primeiro ponto
-        // 2. Intervalo de tempo (ex: 30s)  
-        // 3. Mudança significativa de velocidade (>10 km/h)
-        const shouldInclude = !lastTime || 
-                             (currentTime - lastTime) >= (intervalSeconds * 1000) ||
-                             (lastSpeed && Math.abs(currentSpeed - lastSpeed) > 10);
-        
-        if (shouldInclude) {
-            keyPoints.push(point);
-            lastTime = currentTime;
-            lastSpeed = currentSpeed;
-        }
-    });
-    
-    return keyPoints;
-}
-
-// FUNÇÃO: Fallback para trajeto simplificado (caso dados GPS falhem)
-function loadFallbackTrajectory(activity) {
-    console.log("Carregando trajeto simplificado (fallback)");
-    
-    if (activity.map && activity.map.summary_polyline) {
-        const latlngs = L.Polyline.fromEncoded(activity.map.summary_polyline).getLatLngs();
-        activityPolyline = L.polyline(latlngs, { color: '#f85149', weight: 3 }).addTo(activityMap);
-        
-        activityPolyline.on('click', handleMapClick);
-        activityMap.fitBounds(activityPolyline.getBounds());
-        
-        L.marker(latlngs[0]).addTo(activityMap).bindPopup('🏁 Início');
-        L.marker(latlngs[latlngs.length - 1]).addTo(activityMap).bindPopup('🏆 Fim');
-        
-        showMessage(result, 'Trajeto básico carregado (dados GPS limitados)', 'info');
-    }
-}
-
-// FUNÇÃO AUXILIAR: Cria ícones customizados
-function createCustomIcon(emoji, color) {
-    return L.divIcon({
-        html: `<div style="
-            background-color: ${color}; 
-            border-radius: 50%; 
-            width: 30px; 
-            height: 30px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            font-size: 14px;
-            border: 2px solid white;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-        ">${emoji}</div>`,
-        iconSize: [30, 30],
-        iconAnchor: [15, 15]
-    });
-}
-
-// NOVA FUNÇÃO: Adiciona controles de visualização
+// Adiciona controles de visualização
 function addTrajectoryControls() {
     // Legenda de velocidade
     const legend = L.control({ position: 'bottomleft' });
@@ -983,220 +879,7 @@ function addTrajectoryControls() {
     legend.addTo(activityMap);
 }
 
-// NOVA FUNÇÃO para adicionar marcadores GPS
-async function addGPSMarkersToMap(activityId) {
-    try {
-        console.log("Carregando pontos GPS para a atividade:", activityId);
-        showMessage(result, 'Carregando pontos GPS...', 'info');
-
-        const gpsPoints = await window.go.main.App.GetAllGPSPoints(activityId);
-        
-        if (!gpsPoints || gpsPoints.length === 0) {
-            console.log("Nenhum ponto GPS encontrado");
-            showMessage(result, '', ''); // Limpa mensagem
-            return;
-        }
-
-        console.log(`Adicionando ${gpsPoints.length} marcadores GPS ao mapa`);
-
-        // Cria um grupo de camadas para os marcadores GPS
-        const gpsMarkersGroup = L.layerGroup().addTo(activityMap);
-
-        // Adiciona cada ponto como um pequeno marcador circular
-        gpsPoints.forEach((point, index) => {
-            const speed = point.velocity * 3.6; // m/s para km/h
-            
-            // Cor baseada na velocidade
-            let color = '#58a6ff'; // Azul padrão
-            if (speed > 30) color = '#f85149'; // Vermelho para alta velocidade
-            else if (speed > 15) color = '#ffa657'; // Laranja para média velocidade
-            else if (speed > 5) color = '#56d364'; // Verde para baixa velocidade
-
-            const marker = L.circleMarker([point.lat, point.lng], {
-                radius: 4,
-                fillColor: color,
-                fillOpacity: 0.7,
-                color: '#ffffff',
-                weight: 1,
-                opacity: 0.8
-            });
-
-            // Popup com informações do ponto
-            const time = new Date(point.time).toLocaleTimeString('pt-BR');
-            marker.bindPopup(`
-                <div style="font-size: 12px;">
-                    <strong>⏰ ${time}</strong><br>
-                    📍 ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}<br>
-                    🏃 ${speed.toFixed(1)} km/h<br>
-                    ⛰️ ${point.altitude.toFixed(0)}m<br>
-                    🧭 ${point.bearing.toFixed(0)}°
-                </div>
-            `);
-
-            // Adiciona ao grupo
-            gpsMarkersGroup.addLayer(marker);
-        });
-
-        // Controle de camadas para mostrar/ocultar marcadores
-        const overlayMaps = {
-            "📍 Pontos GPS": gpsMarkersGroup
-        };
-        
-        L.control.layers(null, overlayMaps, { 
-            position: 'topright',
-            collapsed: false 
-        }).addTo(activityMap);
-
-        console.log(`${gpsPoints.length} marcadores GPS adicionados com sucesso`);
-        showMessage(result, `${gpsPoints.length} pontos GPS carregados no mapa`, 'success');
-
-        // Limpa a mensagem após 3 segundos
-        setTimeout(() => {
-            showMessage(result, '', '');
-        }, 3000);
-
-    } catch (error) {
-        console.error("Erro ao carregar pontos GPS:", error);
-        showMessage(result, `Erro ao carregar pontos GPS: ${error}`, 'error');
-    }
-}
-
-// Função para lidar com o clique no mapa para sincronização manual
-async function handleMapClick(e) {
-    if (!selectedActivity) return;
-
-    try {
-        console.log(`Clique no mapa detectado em: ${e.latlng.lat}, ${e.latlng.lng}`);
-        showMessage(result, 'Ajustando ponto de sincronização...', 'info');
-
-        const point = await window.go.main.App.GetGPSPointForMapClick(selectedActivity.id, e.latlng.lat, e.latlng.lng);
-        
-        if (point && point.lat && point.lng) {
-            console.log(`Ponto de sincronização manual definido para: ${point.time}`);
-            manualSyncTime = point.time; // Armazena o tempo manual
-            updateVideoStartMarker(point.lat, point.lng, '▶️ Início Manual do Vídeo');
-            showMessage(result, `Ponto de sincronização manual definido.`, 'success');
-        } else {
-            showMessage(result, `Não foi possível encontrar um ponto GPS próximo ao clique.`, 'error');
-        }
-
-    } catch (error) {
-        console.error("Erro ao definir ponto de sincronização manual:", error);
-        showMessage(result, `Erro ao ajustar sincronização: ${error}`, 'error');
-    }
-}
-
-// Função auxiliar para criar/atualizar o marcador de início do vídeo
-function updateVideoStartMarker(lat, lng, popupText) {
-     if (!activityMap) {
-        console.error("Mapa não está inicializado para atualizar o marcador");
-        return;
-    }
-
-    if (videoStartMarker) {
-        videoStartMarker.remove();
-        videoStartMarker = null;
-    }
-
-    const blueIcon = new L.Icon({
-        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-        iconSize: [25, 41], 
-        iconAnchor: [12, 41], 
-        popupAnchor: [1, -34], 
-        shadowSize: [41, 41]
-    });
-
-    videoStartMarker = L.marker([lat, lng], { icon: blueIcon })
-        .addTo(activityMap)
-        .bindPopup(popupText)
-        .openPopup();
-
-    setTimeout(() => {
-        try {
-            activityMap.invalidateSize();
-            // Usar setView para centralizar e aplicar zoom.
-            activityMap.setView([lat, lng], 16);
-            console.log("Mapa centralizado e com zoom no novo marcador de início.");
-        } catch (error) {
-            console.error("Erro ao centralizar mapa no marcador:", error);
-        }
-    }, 200);
-}
-
-async function selectVideo() {
-    try {
-        const path = await window.go.main.App.SelectVideoFile();
-        if (!path) return;
-
-        selectedVideoPath = path;
-        manualSyncTime = ""; // Reseta ao selecionar um novo vídeo
-
-        const fileName = path.split(/[\\/]/).pop();
-        if (videoInfo) {
-            videoInfo.innerHTML = `
-                <h4>Vídeo Selecionado</h4>
-                <p><strong>Arquivo:</strong> ${fileName}</p>
-            `;
-        }
-        
-        if (processBtn) {
-            processBtn.disabled = false;
-        }
-
-        console.log("Buscando ponto GPS para sincronização automática...");
-        const point = await window.go.main.App.GetGPSPointForVideoTime(selectedActivity.id, path);
-        
-        if (point && point.lat && point.lng) {
-            updateVideoStartMarker(point.lat, point.lng, '▶️ Início Automático (Clique no trajeto para ajustar)');
-        } else {
-            showMessage(result, 'Não foi possível encontrar dados GPS para o horário do vídeo. Clique no mapa para definir o início.', 'error');
-        }
-    } catch (error) {
-        showMessage(result, `Erro ao selecionar vídeo: ${error}`, 'error');
-    }
-}
-
-async function processVideo() {
-    if (!selectedActivity || !selectedVideoPath) {
-        showMessage(result, 'Selecione uma atividade e um vídeo', 'error');
-        return;
-    }
-    try {
-        if (processBtn) {
-            processBtn.disabled = true;
-            processBtn.textContent = 'Processando...';
-        }
-        
-        if (progress) {
-            progress.classList.remove('hidden');
-        }
-        
-        showMessage(result, '', '');
-        simulateProgress();
-
-        // Passa o tempo manual (pode ser uma string vazia) para o backend
-        const outputPath = await window.go.main.App.ProcessVideoOverlay(selectedActivity.id, selectedVideoPath, manualSyncTime);
-        
-        updateProgress(100);
-        showMessage(result, `Vídeo processado com sucesso!<br><strong>Local:</strong> ${outputPath}`, 'success');
-    } catch (error) {
-        showMessage(result, `Erro no processamento: ${error}`, 'error');
-    } finally {
-        if (processBtn) {
-            processBtn.disabled = false;
-            processBtn.textContent = 'Processar com Overlay';
-        }
-        
-        setTimeout(() => {
-            if (progress) {
-                progress.classList.add('hidden');
-            }
-            updateProgress(0);
-        }, 3000);
-    }
-}
-
+// Carrega marcadores GPS com densidade
 async function loadGPSMarkersWithDensity(activityId, density = 'medium') {
     try {
         console.log(`📍 Carregando marcadores GPS (densidade: ${density})...`);
@@ -1290,7 +973,7 @@ async function loadGPSMarkersWithDensity(activityId, density = 'medium') {
     }
 }
 
-// FUNÇÃO AUXILIAR: Tamanho do marcador baseado na densidade
+// Funções auxiliares de densidade
 function getDensityRadius(density) {
     switch(density) {
         case 'ultra_high': return 3;
@@ -1301,7 +984,6 @@ function getDensityRadius(density) {
     }
 }
 
-// FUNÇÃO AUXILIAR: Label da densidade
 function getDensityLabel(density) {
     switch(density) {
         case 'ultra_high': return 'Ultra Alta';
@@ -1309,6 +991,163 @@ function getDensityLabel(density) {
         case 'medium': return 'Média';
         case 'low': return 'Baixa';
         default: return 'Média';
+    }
+}
+
+// Fallback para trajeto simplificado
+function loadFallbackTrajectory(activity) {
+    console.log("Carregando trajeto simplificado (fallback)");
+    
+    if (activity.map && activity.map.summary_polyline) {
+        const latlngs = L.Polyline.fromEncoded(activity.map.summary_polyline).getLatLngs();
+        activityPolyline = L.polyline(latlngs, { color: '#f85149', weight: 3 }).addTo(activityMap);
+        
+        activityPolyline.on('click', handleMapClick);
+        activityMap.fitBounds(activityPolyline.getBounds());
+        
+        L.marker(latlngs[0]).addTo(activityMap).bindPopup('🏁 Início');
+        L.marker(latlngs[latlngs.length - 1]).addTo(activityMap).bindPopup('🏆 Fim');
+        
+        showMessage(result, 'Trajeto básico carregado (dados GPS limitados)', 'info');
+    }
+}
+
+// Handler de clique no mapa para sincronização manual
+async function handleMapClick(e) {
+    if (!selectedActivity) return;
+
+    try {
+        console.log(`Clique no mapa detectado em: ${e.latlng.lat}, ${e.latlng.lng}`);
+        showMessage(result, 'Ajustando ponto de sincronização...', 'info');
+
+        const point = await window.go.main.App.GetGPSPointForMapClick(selectedActivity.id, e.latlng.lat, e.latlng.lng);
+        
+        if (point && point.lat && point.lng) {
+            console.log(`Ponto de sincronização manual definido para: ${point.time}`);
+            manualSyncTime = point.time; // Armazena o tempo manual
+            updateVideoStartMarker(point.lat, point.lng, '▶️ Início Manual do Vídeo');
+            showMessage(result, `Ponto de sincronização manual definido.`, 'success');
+        } else {
+            showMessage(result, `Não foi possível encontrar um ponto GPS próximo ao clique.`, 'error');
+        }
+
+    } catch (error) {
+        console.error("Erro ao definir ponto de sincronização manual:", error);
+        showMessage(result, `Erro ao ajustar sincronização: ${error}`, 'error');
+    }
+}
+
+// Atualiza marcador de início do vídeo
+function updateVideoStartMarker(lat, lng, popupText) {
+    if (!activityMap) {
+        console.error("Mapa não está inicializado para atualizar o marcador");
+        return;
+    }
+
+    if (videoStartMarker) {
+        videoStartMarker.remove();
+        videoStartMarker = null;
+    }
+
+    const blueIcon = new L.Icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+        iconSize: [25, 41], 
+        iconAnchor: [12, 41], 
+        popupAnchor: [1, -34], 
+        shadowSize: [41, 41]
+    });
+
+    videoStartMarker = L.marker([lat, lng], { icon: blueIcon })
+        .addTo(activityMap)
+        .bindPopup(popupText)
+        .openPopup();
+
+    setTimeout(() => {
+        try {
+            activityMap.invalidateSize();
+            activityMap.setView([lat, lng], 16);
+            console.log("Mapa centralizado e com zoom no novo marcador de início.");
+        } catch (error) {
+            console.error("Erro ao centralizar mapa no marcador:", error);
+        }
+    }, 200);
+}
+
+// ========================================
+// FUNÇÕES DE VÍDEO
+// ========================================
+
+async function selectVideo() {
+    try {
+        const path = await window.go.main.App.SelectVideoFile();
+        if (!path) return;
+
+        selectedVideoPath = path;
+        manualSyncTime = ""; // Reseta ao selecionar um novo vídeo
+
+        const fileName = path.split(/[\\/]/).pop();
+        if (videoInfo) {
+            videoInfo.innerHTML = `
+                <h4>Vídeo Selecionado</h4>
+                <p><strong>Arquivo:</strong> ${fileName}</p>
+            `;
+        }
+        
+        if (processBtn) {
+            processBtn.disabled = false;
+        }
+
+        console.log("Buscando ponto GPS para sincronização automática...");
+        const point = await window.go.main.App.GetGPSPointForVideoTime(selectedActivity.id, path);
+        
+        if (point && point.lat && point.lng) {
+            updateVideoStartMarker(point.lat, point.lng, '▶️ Início Automático (Clique no trajeto para ajustar)');
+        } else {
+            showMessage(result, 'Não foi possível encontrar dados GPS para o horário do vídeo. Clique no mapa para definir o início.', 'error');
+        }
+    } catch (error) {
+        showMessage(result, `Erro ao selecionar vídeo: ${error}`, 'error');
+    }
+}
+
+async function processVideo() {
+    if (!selectedActivity || !selectedVideoPath) {
+        showMessage(result, 'Selecione uma atividade e um vídeo', 'error');
+        return;
+    }
+    try {
+        if (processBtn) {
+            processBtn.disabled = true;
+            processBtn.textContent = 'Processando...';
+        }
+        
+        if (progress) {
+            progress.classList.remove('hidden');
+        }
+        
+        showMessage(result, '', '');
+        simulateProgress();
+
+        // Passa o tempo manual (pode ser uma string vazia) para o backend
+        const outputPath = await window.go.main.App.ProcessVideoOverlay(selectedActivity.id, selectedVideoPath, manualSyncTime);
+        
+        updateProgress(100);
+        showMessage(result, `Vídeo processado com sucesso!<br><strong>Local:</strong> ${outputPath}`, 'success');
+    } catch (error) {
+        showMessage(result, `Erro no processamento: ${error}`, 'error');
+    } finally {
+        if (processBtn) {
+            processBtn.disabled = false;
+            processBtn.textContent = 'Processar com Overlay';
+        }
+        
+        setTimeout(() => {
+            if (progress) {
+                progress.classList.add('hidden');
+            }
+            updateProgress(0);
+        }, 3000);
     }
 }
 
@@ -1332,6 +1171,10 @@ function updateProgress(value) {
         progressText.textContent = `${Math.round(value)}%`;
     }
 }
+
+// ========================================
+// FUNÇÕES UTILITÁRIAS
+// ========================================
 
 function showMessage(container, message, type) {
     try {
@@ -1373,12 +1216,48 @@ function translateActivityType(type) {
         'Walk': 'Caminhada',
         'Swimming': 'Natação',
         'Workout': 'Treino',
-        'WeightTraining': 'Musculação'
+        'WeightTraining': 'Musculação',
+        'VirtualRide': 'Ciclismo Virtual',
+        'VirtualRun': 'Corrida Virtual',
+        'EBikeRide': 'E-Bike',
+        'Velomobile': 'Velomobile',
+        'AlpineSki': 'Esqui Alpino',
+        'BackcountrySki': 'Esqui Backcountry',
+        'Canoeing': 'Canoagem',
+        'Crossfit': 'Crossfit',
+        'Elliptical': 'Elíptico',
+        'Golf': 'Golfe',
+        'Handcycle': 'Handbike',
+        'IceSkate': 'Patinação no Gelo',
+        'InlineSkate': 'Patinação Inline',
+        'Kayaking': 'Caiaque',
+        'Kitesurf': 'Kitesurf',
+        'NordicSki': 'Esqui Nórdico',
+        'RockClimbing': 'Escalada',
+        'RollerSki': 'Ski com Rodas',
+        'Rowing': 'Remo',
+        'Sail': 'Vela',
+        'Skateboard': 'Skate',
+        'Snowboard': 'Snowboard',
+        'Snowshoe': 'Caminhada na Neve',
+        'Soccer': 'Futebol',
+        'StairStepper': 'Escada',
+        'StandUpPaddling': 'Stand Up Paddle',
+        'Surfing': 'Surf',
+        'Tennis': 'Tênis',
+        'Volleyball': 'Vôlei',
+        'Wheelchair': 'Cadeira de Rodas',
+        'Windsurf': 'Windsurf',
+        'Yoga': 'Yoga'
     };
     return translations[type] || type;
 }
 
-// FUNÇÃO AUXILIAR: Remove controles antigos
+// ========================================
+// FUNÇÕES AUXILIARES DO MAPA
+// ========================================
+
+// Limpa controles antigos
 function clearTrajectoryControls() {
     // Remove controles existentes se houver
     if (activityMap) {
@@ -1390,7 +1269,7 @@ function clearTrajectoryControls() {
     }
 }
 
-// FUNÇÃO AUXILIAR para resetar marcadores quando necessário
+// Reseta marcadores quando necessário
 function clearGPSMarkers() {
     if (activityMap) {
         activityMap.eachLayer((layer) => {
@@ -1401,4 +1280,8 @@ function clearGPSMarkers() {
     }
 }
 
-console.log('✅ main.js carregado completamente - Versão com Autenticação Automática');
+// ========================================
+// MENSAGEM FINAL DE CARREGAMENTO
+// ========================================
+
+console.log('✅ main.js carregado completamente - Versão com Paginação Completa');
