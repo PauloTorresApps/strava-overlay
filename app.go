@@ -20,7 +20,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// App struct
+// App struct - Mantendo estrutura original
 type App struct {
 	ctx          context.Context
 	stravaAuth   *auth.StravaAuth
@@ -56,7 +56,7 @@ type FrontendActivity struct {
 	StartLatLng []float64  `json:"start_latlng"`
 	EndLatLng   []float64  `json:"end_latlng"`
 	Map         strava.Map `json:"map"`
-	HasGPS      bool       `json:"has_gps"` // Nova propriedade para indicar se tem GPS
+	HasGPS      bool       `json:"has_gps"`
 }
 
 type FrontendActivityDetail struct {
@@ -139,7 +139,7 @@ func (a *App) AuthenticateStrava() error {
 	return nil
 }
 
-// NOVA FUNÇÃO: GetActivitiesPage retorna uma página de atividades
+// NOVA FUNÇÃO: GetActivitiesPage retorna uma página específica de atividades
 func (a *App) GetActivitiesPage(page int) (*PaginatedActivities, error) {
 	if a.stravaClient == nil {
 		return nil, fmt.Errorf("not authenticated")

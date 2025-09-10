@@ -13,11 +13,8 @@ async function checkAuthenticationOnStartup() {
     isCheckingAuth = true;
 
     try {
-        showMessage(statusDiv, '🔍 Verificando credenciais salvas...', 'info');
-        if (authBtn) {
-            authBtn.disabled = true;
-            authBtn.textContent = 'Verificando...';
-        }
+        updateHeaderStatus('checking', 'Verificando conexão...');
+        hideAuthButton();
 
         const response = await window.go.main.App.CheckAuthenticationStatus();
         console.log('📡 Resposta do backend:', response);
@@ -44,8 +41,8 @@ function handleAuthSuccess(response) {
     console.log('✅ Autenticação bem-sucedida');
     isAuthenticated = true;
 
-    showMessage(statusDiv, `✅ ${response.message}`, 'success');
-    if (authBtn) authBtn.style.display = 'none';
+    updateHeaderStatus('connected', 'Conectado ao Strava');
+    hideAuthButton();
     if (activitiesSection) activitiesSection.classList.remove('hidden');
 
     loadActivitiesPage(1); // Carrega a primeira página de atividades
@@ -59,12 +56,8 @@ function handleAuthFailure(error) {
     console.log('❌ Autenticação necessária:', error);
     isAuthenticated = false;
 
-    showMessage(statusDiv, 'Clique no botão para conectar ao Strava', 'info');
-    if (authBtn) {
-        authBtn.disabled = false;
-        authBtn.textContent = 'Autenticar com Strava';
-        authBtn.style.display = 'block';
-    }
+    updateHeaderStatus('error', 'Não conectado');
+    showAuthButton();
 }
 
 /**
@@ -75,12 +68,8 @@ function handleAuthError(error) {
     console.error('❌ Erro na verificação:', error);
     isAuthenticated = false;
 
-    showMessage(statusDiv, 'Erro na verificação. Clique para autenticar manualmente.', 'error');
-    if (authBtn) {
-        authBtn.disabled = false;
-        authBtn.textContent = 'Autenticar com Strava';
-        authBtn.style.display = 'block';
-    }
+    updateHeaderStatus('error', 'Erro na conexão');
+    showAuthButton();
 }
 
 /**
@@ -90,17 +79,14 @@ async function authenticateStrava() {
     if (isCheckingAuth) return;
 
     try {
-        if (authBtn) {
-            authBtn.disabled = true;
-            authBtn.textContent = 'Conectando...';
-        }
-        showMessage(statusDiv, 'Autenticando...', 'info');
+        isCheckingAuth = true;
+        updateHeaderStatus('checking', 'Conectando...');
+        hideAuthButton();
 
         await window.go.main.App.AuthenticateStrava();
 
         isAuthenticated = true;
-        showMessage(statusDiv, 'Conectado com sucesso!', 'success');
-        if (authBtn) authBtn.style.display = 'none';
+        updateHeaderStatus('connected', 'Conectado ao Strava');
         if (activitiesSection) activitiesSection.classList.remove('hidden');
 
         loadActivitiesPage(1);
@@ -108,10 +94,57 @@ async function authenticateStrava() {
     } catch (error) {
         console.error('❌ Erro na autenticação manual:', error);
         isAuthenticated = false;
-        showMessage(statusDiv, `Erro: ${error}`, 'error');
-        if (authBtn) {
-            authBtn.disabled = false;
-            authBtn.textContent = 'Autenticar com Strava';
-        }
+        updateHeaderStatus('error', 'Falha na autenticação');
+        showAuthButton();
+    } finally {
+        isCheckingAuth = false;
+    }
+}
+
+// === FUNÇÕES PARA MANIPULAR O HEADER ===
+
+/**
+ * Atualiza o status no header.
+ * @param {string} status - 'checking', 'connected', ou 'error'
+ * @param {string} text - Texto a exibir
+ */
+function updateHeaderStatus(status, text) {
+    const statusIndicator = document.getElementById('statusIndicator');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+
+    if (statusIndicator && statusDot && statusText) {
+        // Remove classes existentes
+        statusIndicator.className = 'status-indicator';
+        statusDot.className = 'status-dot';
+        
+        // Adiciona nova classe
+        statusIndicator.classList.add(status);
+        statusDot.classList.add(status);
+        
+        // Atualiza texto
+        statusText.textContent = text;
+    }
+}
+
+/**
+ * Mostra o botão de autenticação.
+ */
+function showAuthButton() {
+    const authBtn = document.getElementById('authBtn');
+    if (authBtn) {
+        authBtn.classList.add('show');
+        authBtn.onclick = authenticateStrava;
+    }
+}
+
+/**
+ * Esconde o botão de autenticação.
+ */
+function hideAuthButton() {
+    const authBtn = document.getElementById('authBtn');
+    if (authBtn) {
+        authBtn.classList.remove('show');
+        authBtn.onclick = null;
     }
 }
