@@ -91,38 +91,56 @@ function displayActivities(activities) {
 }
 
 /**
- * Cria um elemento de card para uma atividade.
+ * Cria um elemento de card para uma atividade - VERSÃO SIMPLIFICADA.
  * @param {object} activity - Os dados da atividade.
  * @returns {HTMLElement} O elemento do card criado.
  */
 function createActivityCard(activity) {
     const card = document.createElement('div');
     card.className = 'activity-card';
-    if (!activity.has_gps) card.classList.add('no-gps');
-
-    if (activity.has_gps) {
-        card.onclick = () => selectActivity(activity, card);
-    } else {
+    
+    // Adiciona classe especial para atividades sem GPS
+    if (!activity.has_gps) {
+        card.classList.add('no-gps');
         card.title = 'Esta atividade não possui dados GPS';
     }
 
-    const date = formatDate(new Date(activity.start_date));
-    const distance = (activity.distance / 1000).toFixed(2);
-    const duration = formatDuration(activity.moving_time);
-    const maxSpeed = activity.max_speed ? (activity.max_speed * 3.6).toFixed(1) : 'N/A';
+    // Só permite seleção se tiver GPS
+    if (activity.has_gps) {
+        card.onclick = () => selectActivity(activity, card);
+    } else {
+        card.style.cursor = 'not-allowed';
+    }
 
-    const gpsBadge = activity.has_gps
-        ? '<span class="gps-badge">GPS</span>'
-        : '<span class="gps-badge no-gps-badge">Sem GPS</span>';
+    // Formata data e hora
+    const activityDate = new Date(activity.start_date);
+    const dateStr = formatDate(activityDate);
+    const timeStr = formatTime(activityDate);
 
+    // Badge de GPS
+    const gpsBadge = activity.has_gps 
+        ? '<span class="gps-badge has-gps">GPS</span>' 
+        : '<span class="gps-badge no-gps">Sem GPS</span>';
+
+    // HTML simplificado - nome, tipo, data/hora e badge GPS
     card.innerHTML = `
-        <h3>${activity.name} ${gpsBadge}</h3>
-        <p><strong>Tipo:</strong> ${translateActivityType(activity.type)}</p>
-        <p><strong>Data:</strong> ${date}</p>
-        <p><strong>Distância:</strong> ${distance} km</p>
-        <p><strong>Duração:</strong> ${duration}</p>
-        ${activity.has_gps ? `<p><strong>Vel. Máx:</strong> ${maxSpeed} km/h</p>` : ''}
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+            <h3 style="margin: 0; font-size: 1.1rem; line-height: 1.3; flex: 1;">${activity.name}</h3>
+            ${gpsBadge}
+        </div>
+        <div style="color: var(--secondary-text); font-size: 0.9rem;">
+            <div style="margin-bottom: 4px;">
+                <strong style="color: var(--accent-color);">🚴 ${translateActivityType(activity.type)}</strong>
+            </div>
+            <div style="margin-bottom: 4px;">
+                <strong style="color: var(--primary-text);">📅 ${dateStr}</strong>
+            </div>
+            <div>
+                <strong style="color: var(--primary-text);">🕒 ${timeStr}</strong>
+            </div>
+        </div>
     `;
+    
     return card;
 }
 

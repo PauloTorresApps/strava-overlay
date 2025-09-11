@@ -181,15 +181,22 @@
         .activity-card { 
             background-color: var(--bg-color);
             border: 1px solid var(--border-color); 
-            padding: 15px; 
+            padding: 12px; /* Reduzido de 15px para 12px */
             border-radius: 6px; 
             cursor: pointer; 
-            transition: box-shadow 0.2s, border-color 0.2s; 
+            transition: all 0.2s ease;
+            min-height: 100px; /* Ajustado para acomodar o tipo */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
+
         .activity-card.selected, .activity-card:hover { 
             border-color: var(--accent-color);
             box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.3);
+            transform: translateY(-2px);
         }
+
         .activity-card h3 {
             margin: 0 0 10px 0;
             font-size: 1.1em;
@@ -207,6 +214,11 @@
             background-color: #1c2128;
             cursor: not-allowed; 
             opacity: 0.6; 
+        }
+
+        .activity-card.no-gps:hover {
+            transform: none; /* Remove animação de hover para cards sem GPS */
+            box-shadow: none;
         }
 
         #mapContainer { 
@@ -241,15 +253,22 @@
         .result-message .info { background-color: var(--info-bg); color: var(--info-text); border-color: var(--info-border); }
 
         .gps-badge { 
-            font-size: 0.7em; 
-            padding: 3px 8px; 
-            border-radius: 10px; 
+            font-size: 0.65rem; /* Ligeiramente menor */
+            padding: 2px 6px; /* Padding reduzido */
+            border-radius: 8px; /* Border radius reduzido */
             color: white; 
-            margin-left: 8px;
-            vertical-align: middle;
+            font-weight: 500;
+            flex-shrink: 0; /* Impede que o badge encolha */
+            align-self: flex-start; /* Alinha no topo */
         }
         .gps-badge { background-color: #238636; }
         .no-gps-badge { background-color: #6a737d; }
+        .gps-badge.has-gps { 
+            background-color: var(--button-bg); 
+        }
+        .gps-badge.no-gps { 
+            background-color: #6a737d; 
+        }
         
         #stats {
             margin-top: 15px;
@@ -268,11 +287,21 @@
             border: 1px solid var(--border-color);
         }
 
-        @media (max-width: 768px) {
-            .header {
-                flex-direction: column;
-                gap: 15px;
-                text-align: center;
+       @media (max-width: 768px) {
+            .activity-grid {
+                grid-template-columns: 1fr; /* Uma coluna em mobile */
+                gap: 12px;
+            }
+            
+            .activity-card {
+                min-height: 70px; /* Ainda mais compacto em mobile */
+                padding: 10px;
+            }
+        }
+
+        @media (min-width: 1200px) {
+            .activity-grid {
+                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); /* Ainda menor em telas grandes */
             }
         }
     </style>
