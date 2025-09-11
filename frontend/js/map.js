@@ -1,8 +1,7 @@
 console.log('🗺️ map.js carregando (versão corrigida)...');
 
 /**
- * Inicializa e exibe o mapa para uma atividade específica.
- * @param {object} activity - Os dados da atividade.
+ * SUBSTITUA a função displayMap existente por esta versão com seletor de mapas
  */
 async function displayMap(activity) {
     console.log("🗺️ Inicializando mapa para a atividade:", activity.name);
@@ -40,16 +39,19 @@ async function displayMap(activity) {
         // Aguarda um pouco para garantir que o DOM esteja pronto
         await new Promise(resolve => setTimeout(resolve, 100));
 
+        // Carrega preferência salva do usuário
+        loadMapPreference();
+
         // Inicializa o mapa Leaflet
         activityMap = L.map('mapContainer').setView([0, 0], 2);
         
-        console.log("🗺️ Mapa criado, adicionando tiles...");
+        console.log("🗺️ Mapa criado, adicionando camada de tiles...");
         
-        // Adiciona camada de tiles
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors',
-            maxZoom: 18
-        }).addTo(activityMap);
+        // Adiciona camada de tiles baseada na preferência
+        addTileLayer(currentMapProvider);
+        
+        // Adiciona controle de seleção de camadas
+        addLayerSelector();
 
         console.log("📊 Carregando dados GPS...");
         
@@ -72,6 +74,7 @@ async function displayMap(activity) {
         }
     }
 }
+
 /**
  * Carrega e exibe a trajetória interpolada com gradiente de velocidade.
  * @param {object} activity - A atividade para a qual carregar a trajetória.
@@ -504,3 +507,290 @@ if (typeof window !== 'undefined') {
     window.debugMapState = debugMapState;
     window.invalidateMapSize = invalidateMapSize;
 }
+
+
+/**
+ * Configurações dos diferentes tipos de mapa disponíveis
+ */
+const MAP_PROVIDERS = {
+    osm: {
+        name: 'OpenStreetMap',
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: '© OpenStreetMap contributors',
+        darkFilter: true // Aplica filtro dark
+    },
+    satellite: {
+        name: 'Satélite (Esri)',
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attribution: '© Esri, Maxar, Earthstar Geographics',
+        darkFilter: false
+    },
+    terrain: {
+        name: 'Terreno',
+        url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+        attribution: '© OpenTopoMap (CC-BY-SA)',
+        darkFilter: true
+    },
+    dark: {
+        name: 'Dark Mode',
+        url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',
+        attribution: '© Stadia Maps © OpenMapTiles © OpenStreetMap contributors',
+        darkFilter: false
+    },
+    cartodb_dark: {
+        name: 'CartoDB Dark',
+        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+        attribution: '© OpenStreetMap © CartoDB',
+        darkFilter: false
+    },
+    cyclemap: {
+        name: 'Ciclovias',
+        url: 'https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=YOUR_API_KEY',
+        attribution: '© Thunderforest © OpenStreetMap contributors',
+        darkFilter: true,
+        requiresApiKey: true
+    }
+};
+
+let currentMapProvider = 'osm'; // Padrão
+let currentTileLayer = null;
+
+/**
+ * Inicializa o mapa com seletor de camadas
+ */
+function initializeMapWithLayerControl(activity) {
+    console.log("🗺️ Inicializando mapa com controle de camadas...");
+
+    // Cria o mapa
+    activityMap = L.map('mapContainer').setView([0, 0], 2);
+    
+    // Adiciona camada inicial
+    addTileLayer(currentMapProvider);
+    
+    // Adiciona controle de camadas
+    addLayerSelector();
+    
+    console.log("✅ Mapa inicializado com seletor de camadas");
+}
+
+/**
+ * Adiciona camada de tiles ao mapa
+ */
+function addTileLayer(providerKey) {
+    const provider = MAP_PROVIDERS[providerKey];
+    
+    if (!provider) {
+        console.error('❌ Provedor de mapa inválido:', providerKey);
+        return;
+    }
+    
+    // Remove camada anterior se existir
+    if (currentTileLayer) {
+        activityMap.removeLayer(currentTileLayer);
+    }
+    
+    // Cria nova camada
+    currentTileLayer = L.tileLayer(provider.url, {
+        attribution: provider.attribution,
+        maxZoom: 18
+    });
+    
+    // Adiciona ao mapa
+    currentTileLayer.addTo(activityMap);
+    
+    // Aplica filtro dark se necessário
+    applyMapTheme(provider.darkFilter);
+    
+    currentMapProvider = providerKey;
+    console.log(`🗺️ Camada alterada para: ${provider.name}`);
+}
+
+/**
+ * Aplica tema dark ao mapa
+ */
+function applyMapTheme(useDarkFilter) {
+    const tilePane = document.querySelector('.leaflet-tile-pane');
+    
+    if (tilePane) {
+        if (useDarkFilter) {
+            tilePane.style.filter = 'invert(1) hue-rotate(180deg) brightness(95%) contrast(90%)';
+        } else {
+            tilePane.style.filter = 'none';
+        }
+    }
+}
+
+/**
+ * Adiciona seletor de camadas ao mapa
+ */
+function addLayerSelector() {
+    const layerControl = L.control({ position: 'topright' });
+    
+    layerControl.onAdd = function() {
+        const div = L.DomUtil.create('div', 'map-layer-control');
+        
+        div.innerHTML = `
+            <div style="
+                background: rgba(22, 27, 34, 0.95);
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                padding: 10px;
+                backdrop-filter: blur(10px);
+                min-width: 160px;
+            ">
+                <div style="
+                    font-weight: bold; 
+                    margin-bottom: 8px; 
+                    color: var(--primary-text); 
+                    font-size: 13px;
+                ">
+                    🗺️ Tipo de Mapa
+                </div>
+                <select id="mapTypeSelector" style="
+                    width: 100%;
+                    padding: 6px;
+                    border: 1px solid var(--border-color);
+                    border-radius: 4px;
+                    background: var(--container-bg);
+                    color: var(--primary-text);
+                    font-size: 12px;
+                ">
+                    <option value="osm">OpenStreetMap</option>
+                    <option value="dark">Dark Mode</option>
+                    <option value="satellite">Satélite</option>
+                    <option value="terrain">Terreno</option>
+                    <option value="cartodb_dark">CartoDB Dark</option>
+                </select>
+                <div style="
+                    font-size: 10px; 
+                    color: var(--secondary-text); 
+                    margin-top: 4px;
+                    text-align: center;
+                ">
+                    Atual: <span id="currentMapType">OpenStreetMap</span>
+                </div>
+            </div>
+        `;
+        
+        // Previne propagação de eventos do mapa
+        L.DomEvent.disableClickPropagation(div);
+        
+        return div;
+    };
+    
+    layerControl.addTo(activityMap);
+    
+    // Adiciona event listener após um delay
+    setTimeout(() => {
+        const selector = document.getElementById('mapTypeSelector');
+        const currentTypeLabel = document.getElementById('currentMapType');
+        
+        if (selector) {
+            selector.value = currentMapProvider;
+            
+            selector.addEventListener('change', (e) => {
+                const newProvider = e.target.value;
+                addTileLayer(newProvider);
+                
+                if (currentTypeLabel) {
+                    currentTypeLabel.textContent = MAP_PROVIDERS[newProvider].name;
+                }
+                
+                // Salva preferência
+                localStorage.setItem('preferredMapType', newProvider);
+            });
+        }
+    }, 100);
+}
+
+/**
+ * Carrega preferência salva do usuário
+ */
+function loadMapPreference() {
+    const saved = localStorage.getItem('preferredMapType');
+    if (saved && MAP_PROVIDERS[saved]) {
+        currentMapProvider = saved;
+        console.log(`📦 Preferência de mapa carregada: ${MAP_PROVIDERS[saved].name}`);
+    }
+}
+
+/**
+ * Versão atualizada da função displayMap para usar o novo sistema
+ */
+async function displayMapWithLayerControl(activity) {
+    console.log("🗺️ Inicializando mapa para a atividade:", activity.name);
+
+    try {
+        // Limpa mapa anterior
+        if (activityMap) {
+            console.log("🧹 Removendo mapa anterior...");
+            activityMap.remove();
+            activityMap = null;
+        }
+        
+        // Limpa marcadores
+        if (videoStartMarker) videoStartMarker = null;
+        if (activityPolyline) activityPolyline = null;
+        manualSyncTime = "";
+
+        // Verifica container
+        const mapContainer = document.getElementById('mapContainer');
+        if (!mapContainer) {
+            throw new Error('Container do mapa não encontrado');
+        }
+
+        mapContainer.innerHTML = '';
+        
+        // Carrega preferência do usuário
+        loadMapPreference();
+        
+        console.log("📍 Criando novo mapa com controle de camadas...");
+        
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Inicializa mapa com sistema de camadas
+        initializeMapWithLayerControl(activity);
+        
+        console.log("📊 Carregando dados GPS...");
+        await loadInterpolatedTrajectory(activity);
+        
+        console.log("✅ Mapa inicializado com sucesso!");
+
+    } catch (error) {
+        console.error("❌ ERRO AO EXIBIR O MAPA:", error);
+        const mapContainer = document.getElementById('mapContainer');
+        if (mapContainer) {
+            mapContainer.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--error-text); flex-direction: column; gap: 10px;">
+                    <div style="font-size: 1.2rem;">❌ Erro ao carregar o mapa</div>
+                    <div style="font-size: 0.9rem; opacity: 0.8;">${error.message}</div>
+                    <button onclick="displayMapWithLayerControl(selectedActivity)" style="margin-top: 10px;">Tentar Novamente</button>
+                </div>
+            `;
+        }
+    }
+}
+
+/**
+ * Função de conveniência para alterar mapa via código
+ */
+function changeMapType(providerKey) {
+    if (MAP_PROVIDERS[providerKey] && activityMap) {
+        addTileLayer(providerKey);
+        
+        // Atualiza seletor se existir
+        const selector = document.getElementById('mapTypeSelector');
+        if (selector) {
+            selector.value = providerKey;
+        }
+        
+        const currentTypeLabel = document.getElementById('currentMapType');
+        if (currentTypeLabel) {
+            currentTypeLabel.textContent = MAP_PROVIDERS[providerKey].name;
+        }
+    }
+}
+
+// Expõe funções globalmente para fácil uso
+window.changeMapType = changeMapType;
+window.MAP_PROVIDERS = MAP_PROVIDERS;
