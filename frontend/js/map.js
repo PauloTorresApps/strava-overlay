@@ -660,6 +660,7 @@ function addLayerSelector() {
                     <option value="satellite">Satélite</option>
                     <option value="terrain">Terreno</option>
                     <option value="cartodb_dark">CartoDB Dark</option>
+                    <option value="cyclemap">Bike Map</option>
                 </select>
                 <div style="
                     font-size: 10px; 
