@@ -533,7 +533,7 @@ const MAP_PROVIDERS = {
     },
     dark: {
         name: 'Dark Mode',
-        url: 'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',
+        url: 'https://tiles.stadiamaps.com/styles/alidade_smooth_dark.json?api_key=API_KEY',
         attribution: '© Stadia Maps © OpenMapTiles © OpenStreetMap contributors',
         darkFilter: false
     },
@@ -545,7 +545,7 @@ const MAP_PROVIDERS = {
     },
     cyclemap: {
         name: 'Ciclovias',
-        url: 'https://{s}.tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=YOUR_API_KEY',
+        url: 'https://tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=API_KEY',
         attribution: '© Thunderforest © OpenStreetMap contributors',
         darkFilter: true,
         requiresApiKey: true
