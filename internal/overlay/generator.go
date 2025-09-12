@@ -34,7 +34,6 @@ type WidgetConfig struct {
 	Size      float64 // Raio do widget
 }
 
-// NewGenerator cria um novo gerador de overlay.
 func NewGenerator() *Generator {
 	tempDir, err := os.MkdirTemp("", "strava_overlays_*")
 	if err != nil {
@@ -63,9 +62,9 @@ func NewGenerator() *Generator {
 	}
 
 	return &Generator{
-		// Dimensões aumentadas para acomodar os widgets orbitais
-		width:      450, // Aumentado de 300 para 450
-		height:     450, // Aumentado de 300 para 450
+		// Dimensões reduzidas para minimizar padding transparente
+		width:      320, // Reduzido de 450 para 320
+		height:     320, // Reduzido de 450 para 320
 		tempDir:    tempDir,
 		fontLoaded: false,
 		fontPath:   fontPath,
@@ -133,8 +132,9 @@ func (g *Generator) generateEnhancedOverlay(point gps.GPSPoint, maxSpeed float64
 	dc.SetRGBA(0, 0, 0, 0) // Fundo transparente
 	dc.Clear()
 
-	centerX := float64(g.width) / 2
-	centerY := float64(g.height) / 2
+	// Centro ajustado para as novas dimensões menores
+	centerX := float64(g.width) / 2  // 160px
+	centerY := float64(g.height) / 2 // 160px
 
 	// 1. Desenha o velocímetro principal no centro
 	g.drawMainSpeedometer(dc, centerX, centerY, point.Velocity*3.6, maxSpeed, point)
@@ -147,12 +147,12 @@ func (g *Generator) generateEnhancedOverlay(point gps.GPSPoint, maxSpeed float64
 
 // drawMainSpeedometer desenha o velocímetro principal no centro
 func (g *Generator) drawMainSpeedometer(dc *gg.Context, cx, cy float64, speed, maxSpeed float64, point gps.GPSPoint) {
-	// Configurações do velocímetro principal
-	radius := 90.0        // Raio principal
-	lineWidth := 18.0     // Largura da linha de fundo
-	progressWidth := 16.0 // Largura da linha de progresso
-	fontSize := 12.0      // Tamanho da fonte para marcações
-	textOffset := 22.0    // Deslocamento do texto
+	// Configurações do velocímetro principal (ligeiramente ajustadas)
+	radius := 80.0        // Reduzido de 90.0 para 80.0
+	lineWidth := 16.0     // Reduzido de 18.0 para 16.0
+	progressWidth := 14.0 // Reduzido de 16.0 para 14.0
+	fontSize := 11.0      // Reduzido de 12.0 para 11.0
+	textOffset := 20.0    // Reduzido de 22.0 para 20.0
 
 	startAngle := gg.Radians(135)
 	totalArc := gg.Radians(270)
@@ -160,7 +160,7 @@ func (g *Generator) drawMainSpeedometer(dc *gg.Context, cx, cy float64, speed, m
 
 	// 1. Máscara para efeito de desvanecimento
 	maskContext := gg.NewContext(g.width, g.height)
-	maskGradient := gg.NewLinearGradient(cx, cy+radius-35, cx, cy+radius+15)
+	maskGradient := gg.NewLinearGradient(cx, cy+radius-30, cx, cy+radius+15)
 	maskGradient.AddColorStop(0, color.White)
 	maskGradient.AddColorStop(1, color.Black)
 	maskContext.SetFillStyle(maskGradient)
@@ -197,10 +197,10 @@ func (g *Generator) drawMainSpeedometer(dc *gg.Context, cx, cy float64, speed, m
 	for i := 0.0; i <= maxSpeed; i += 10 {
 		angle := startAngle + (totalArc * (i / maxSpeed))
 		if i/maxSpeed <= 1.0 {
-			x1 := cx + (radius-10)*math.Cos(angle)
-			y1 := cy + (radius-10)*math.Sin(angle)
-			x2 := cx + (radius-5)*math.Cos(angle)
-			y2 := cy + (radius-5)*math.Sin(angle)
+			x1 := cx + (radius-8)*math.Cos(angle)
+			y1 := cy + (radius-8)*math.Sin(angle)
+			x2 := cx + (radius-4)*math.Cos(angle)
+			y2 := cy + (radius-4)*math.Sin(angle)
 			dc.DrawLine(x1, y1, x2, y2)
 			dc.Stroke()
 
@@ -212,17 +212,17 @@ func (g *Generator) drawMainSpeedometer(dc *gg.Context, cx, cy float64, speed, m
 		}
 	}
 
-	// 5. Bússola interna
-	g.drawCompactCompass(dc, cx, cy, point.Bearing) // Usa o bearing real do ponto GPS
+	// 5. Bússola interna (ligeiramente reduzida)
+	g.drawCompactCompass(dc, cx, cy, point.Bearing)
 
 	// 6. Velocidade digital
-	g.drawDigitalSpeed(dc, cx, cy+55, speed)
+	g.drawDigitalSpeed(dc, cx, cy+48, speed) // Ajustado de cy+55 para cy+48
 }
 
 // drawCompactCompass desenha uma bússola compacta no centro
 func (g *Generator) drawCompactCompass(dc *gg.Context, cx, cy, bearing float64) {
-	radius := 35.0
-	fontSize := 10.0
+	radius := 30.0  // Reduzido de 35.0 para 30.0
+	fontSize := 9.0 // Reduzido de 10.0 para 9.0
 
 	g.loadFont(dc, fontSize)
 
@@ -243,93 +243,88 @@ func (g *Generator) drawCompactCompass(dc *gg.Context, cx, cy, bearing float64) 
 		cardinals := map[string]float64{"N": 270, "E": 0, "S": 90, "W": 180}
 		for text, angle := range cardinals {
 			rad := gg.Radians(angle)
-			textX := cx + (radius-8)*math.Cos(rad)
-			textY := cy + (radius-8)*math.Sin(rad)
+			textX := cx + (radius-7)*math.Cos(rad) // Ajustado de -8 para -7
+			textY := cy + (radius-7)*math.Sin(rad)
 			dc.DrawStringAnchored(text, textX, textY, 0.5, 0.5)
 		}
 	}
 
-	// Agulha da bússola com duas pontas e efeito de vinco
+	// Agulha da bússola ajustada para o tamanho menor
 	dc.Push()
 	dc.Translate(cx, cy)
 	dc.Rotate(gg.Radians(bearing))
 
-	// Dimensões da agulha (reduzidas para não sobrepor os pontos cardeais)
-	needleLength := radius - 12 // Reduzido de radius-8 para radius-12
-	needleWidth := 4.0          // Largura da base da agulha
+	// Dimensões da agulha ajustadas
+	needleLength := radius - 10 // Ajustado de radius-12 para radius-10
+	needleWidth := 7.0          // Ligeiramente reduzido de 8.0 para 7.0
 
 	// === PONTA VERMELHA (Norte magnético) ===
-	// Triângulo da ponta vermelha
-	dc.SetRGBA(0.9, 0.15, 0.15, 1) // Vermelho mais suave
+	dc.SetRGBA(0.9, 0.15, 0.15, 1)
 	dc.MoveTo(0, -needleLength)
-	dc.LineTo(-needleWidth/2, -2)
-	dc.LineTo(needleWidth/2, -2)
+	dc.LineTo(-needleWidth/2, -3) // Ajustado de -4 para -3
+	dc.LineTo(needleWidth/2, -3)
 	dc.ClosePath()
 	dc.Fill()
 
 	// === PONTA BRANCA (Sul magnético) ===
-	// Triângulo da ponta branca
-	dc.SetRGBA(0.95, 0.95, 0.95, 1) // Branco ligeiramente off-white
+	dc.SetRGBA(0.95, 0.95, 0.95, 1)
 	dc.MoveTo(0, needleLength)
-	dc.LineTo(-needleWidth/2, 2)
-	dc.LineTo(needleWidth/2, 2)
+	dc.LineTo(-needleWidth/2, 3) // Ajustado de 4 para 3
+	dc.LineTo(needleWidth/2, 3)
 	dc.ClosePath()
 	dc.Fill()
 
 	// === CORPO CENTRAL DA AGULHA (Efeito de vinco) ===
 	// Lado esquerdo mais escuro (sombra)
 	dc.SetRGBA(0.4, 0.4, 0.4, 0.8)
-	dc.MoveTo(-needleWidth/2, -2)
-	dc.LineTo(-1, -2)
-	dc.LineTo(-1, 2)
-	dc.LineTo(-needleWidth/2, 2)
+	dc.MoveTo(-needleWidth/2, -3) // Ajustado de -4 para -3
+	dc.LineTo(-1.5, -3)
+	dc.LineTo(-1.5, 3)
+	dc.LineTo(-needleWidth/2, 3)
 	dc.ClosePath()
 	dc.Fill()
 
 	// Lado direito mais claro (luz)
 	dc.SetRGBA(0.7, 0.7, 0.7, 0.8)
-	dc.MoveTo(1, -2)
-	dc.LineTo(needleWidth/2, -2)
-	dc.LineTo(needleWidth/2, 2)
-	dc.LineTo(1, 2)
+	dc.MoveTo(1.5, -3)
+	dc.LineTo(needleWidth/2, -3)
+	dc.LineTo(needleWidth/2, 3)
+	dc.LineTo(1.5, 3)
 	dc.ClosePath()
 	dc.Fill()
 
-	// === CONTORNOS PARA DEFINIR MELHOR A AGULHA ===
+	// === CONTORNOS E DETALHES ===
 	// Contorno da ponta vermelha
-	dc.SetLineWidth(0.8)
-	dc.SetRGBA(0.6, 0.1, 0.1, 1) // Vermelho escuro para contorno
+	dc.SetLineWidth(0.7)
+	dc.SetRGBA(0.6, 0.1, 0.1, 1)
 	dc.MoveTo(0, -needleLength)
-	dc.LineTo(-needleWidth/2, -4)
-	dc.LineTo(needleWidth/2, -4)
+	dc.LineTo(-needleWidth/2, -3)
+	dc.LineTo(needleWidth/2, -3)
 	dc.ClosePath()
 	dc.Stroke()
 
 	// Contorno da ponta branca
-	dc.SetRGBA(0.6, 0.6, 0.6, 1) // Cinza para contorno da parte branca
+	dc.SetRGBA(0.6, 0.6, 0.6, 1)
 	dc.MoveTo(0, needleLength)
-	dc.LineTo(-needleWidth/2, 4)
-	dc.LineTo(needleWidth/2, 4)
+	dc.LineTo(-needleWidth/2, 3)
+	dc.LineTo(needleWidth/2, 3)
 	dc.ClosePath()
 	dc.Stroke()
 
 	// === LINHA CENTRAL (Vinco) ===
-	// Linha central mais escura para criar o efeito de vinco
-	dc.SetLineWidth(0.5)
+	dc.SetLineWidth(0.4)
 	dc.SetRGBA(0.2, 0.2, 0.2, 0.9)
 	dc.MoveTo(0, -needleLength)
 	dc.LineTo(0, needleLength)
 	dc.Stroke()
 
 	// === PONTO CENTRAL (Eixo da agulha) ===
-	// Círculo central escuro (eixo)
 	dc.SetRGBA(0.2, 0.2, 0.2, 0.9)
-	dc.DrawCircle(0, 0, 2.5)
+	dc.DrawCircle(0, 0, 2.2) // Ligeiramente reduzido de 2.5 para 2.2
 	dc.Fill()
 
-	// Círculo central claro (brilho no eixo)
 	dc.SetRGBA(0.8, 0.8, 0.8, 0.7)
-	dc.DrawCircle(0, 0, 1.5)
+	dc.DrawCircle(0, 0, 1.3) // Ligeiramente reduzido de 1.5 para 1.3
 	dc.Fill()
 
 	dc.Pop()
@@ -337,22 +332,22 @@ func (g *Generator) drawCompactCompass(dc *gg.Context, cx, cy, bearing float64) 
 
 // drawDigitalSpeed desenha a velocidade digital
 func (g *Generator) drawDigitalSpeed(dc *gg.Context, cx, cy, speed float64) {
-	g.loadFont(dc, 24)
-	dc.SetRGB255(0, 221, 255) // Azul néon
+	g.loadFont(dc, 22) // Ligeiramente reduzido de 24 para 22
+	dc.SetRGB255(0, 221, 255)
 	dc.DrawStringAnchored(fmt.Sprintf("%.1f", speed), cx, cy, 0.5, 0.5)
 
-	g.loadFont(dc, 12)
+	g.loadFont(dc, 11) // Reduzido de 12 para 11
 	dc.SetRGB255(0, 221, 255)
-	dc.DrawStringAnchored("km/h", cx, cy+15, 0.5, 0.5)
+	dc.DrawStringAnchored("km/h", cx, cy+13, 0.5, 0.5) // Ajustado de cy+15 para cy+13
 }
 
 // drawOrbitalWidgets desenha os widgets pequenos ao redor do velocímetro principal
 func (g *Generator) drawOrbitalWidgets(dc *gg.Context, centerX, centerY float64, point gps.GPSPoint) {
-	// Distância orbital dos widgets em relação ao centro (aumentada para dar espaçamento)
-	// Velocímetro principal tem radius=90, então widgets ficam a 90+4=94 pixels de distância
-	orbitRadius := 155.0 // Aumentado de 145.0 para 155.0 (4px a mais de espaçamento)
+	// Distância orbital ajustada para as novas dimensões
+	// Com imagem 320x320, centro em 160x160, widgets ficam próximos às bordas
+	orbitRadius := 125.0 // Reduzido de 155.0 para 125.0
 
-	// Configuração dos widgets orbitais (tamanho reduzido)
+	// Configuração dos widgets orbitais (tamanho ligeiramente reduzido)
 	widgets := []WidgetConfig{
 		{
 			Color: color.RGBA{R: 255, G: 69, B: 0, A: 255}, // Laranja vibrante
@@ -363,7 +358,7 @@ func (g *Generator) drawOrbitalWidgets(dc *gg.Context, centerX, centerY float64,
 			},
 			MaxValue: 2.0, // Máximo 2G para atividades normais
 			Position: 45,  // 45 graus (superior direito)
-			Size:     35,  // Raio do widget (reduzido de 45 para 35)
+			Size:     30,  // Raio do widget (reduzido de 35 para 30)
 		},
 		{
 			Color: color.RGBA{R: 50, G: 205, B: 50, A: 255}, // Verde lima
@@ -371,8 +366,6 @@ func (g *Generator) drawOrbitalWidgets(dc *gg.Context, centerX, centerY float64,
 			Unit:  "RPM",
 			ValueFunc: func(p gps.GPSPoint) float64 {
 				// Estimativa de cadência baseada na velocidade
-				// Para ciclismo: cadência média = (velocidade_kmh * 60) / (circunferência_roda * relação_marcha)
-				// Aproximação simples: 80-100 RPM para velocidades normais
 				if p.Velocity < 1.0 { // Parado
 					return 0
 				}
@@ -382,7 +375,7 @@ func (g *Generator) drawOrbitalWidgets(dc *gg.Context, centerX, centerY float64,
 			},
 			MaxValue: 120, // RPM máximo
 			Position: 135, // 135 graus (superior esquerdo)
-			Size:     35,  // Raio do widget (reduzido de 45 para 35)
+			Size:     30,  // Raio do widget (reduzido de 35 para 30)
 		},
 		{
 			Color: color.RGBA{R: 255, G: 20, B: 147, A: 255}, // Rosa vibrante
@@ -393,7 +386,7 @@ func (g *Generator) drawOrbitalWidgets(dc *gg.Context, centerX, centerY float64,
 			},
 			MaxValue: 2000, // Máximo 2000m de altitude
 			Position: 225,  // 225 graus (inferior esquerdo)
-			Size:     35,   // Raio do widget (reduzido de 45 para 35)
+			Size:     30,   // Raio do widget (reduzido de 35 para 30)
 		},
 		{
 			Color: color.RGBA{R: 255, G: 0, B: 255, A: 255}, // Magenta
@@ -401,7 +394,6 @@ func (g *Generator) drawOrbitalWidgets(dc *gg.Context, centerX, centerY float64,
 			Unit:  "BPM",
 			ValueFunc: func(p gps.GPSPoint) float64 {
 				// Estimativa de frequência cardíaca baseada na velocidade e G-force
-				// Fórmula aproximada para ciclismo recreativo
 				if p.Velocity < 1.0 { // Parado
 					return 65 // Batimentos de repouso
 				}
@@ -415,7 +407,7 @@ func (g *Generator) drawOrbitalWidgets(dc *gg.Context, centerX, centerY float64,
 			},
 			MaxValue: 180, // BPM máximo
 			Position: 315, // 315 graus (inferior direito)
-			Size:     35,  // Raio do widget (reduzido de 45 para 35)
+			Size:     30,  // Raio do widget (reduzido de 35 para 30)
 		},
 	}
 
