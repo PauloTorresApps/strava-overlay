@@ -249,16 +249,87 @@ func (g *Generator) drawCompactCompass(dc *gg.Context, cx, cy, bearing float64) 
 		}
 	}
 
-	// Ponteiro da bússola
+	// Agulha da bússola com duas pontas e efeito de vinco
 	dc.Push()
 	dc.Translate(cx, cy)
 	dc.Rotate(gg.Radians(bearing))
 
-	dc.SetRGBA(1, 0.2, 0.2, 1)
-	dc.MoveTo(0, -radius+8)
-	dc.LineTo(-6, 0)
-	dc.LineTo(6, 0)
+	// Dimensões da agulha (reduzidas para não sobrepor os pontos cardeais)
+	needleLength := radius - 12 // Reduzido de radius-8 para radius-12
+	needleWidth := 4.0          // Largura da base da agulha
+
+	// === PONTA VERMELHA (Norte magnético) ===
+	// Triângulo da ponta vermelha
+	dc.SetRGBA(0.9, 0.15, 0.15, 1) // Vermelho mais suave
+	dc.MoveTo(0, -needleLength)
+	dc.LineTo(-needleWidth/2, -2)
+	dc.LineTo(needleWidth/2, -2)
 	dc.ClosePath()
+	dc.Fill()
+
+	// === PONTA BRANCA (Sul magnético) ===
+	// Triângulo da ponta branca
+	dc.SetRGBA(0.95, 0.95, 0.95, 1) // Branco ligeiramente off-white
+	dc.MoveTo(0, needleLength)
+	dc.LineTo(-needleWidth/2, 2)
+	dc.LineTo(needleWidth/2, 2)
+	dc.ClosePath()
+	dc.Fill()
+
+	// === CORPO CENTRAL DA AGULHA (Efeito de vinco) ===
+	// Lado esquerdo mais escuro (sombra)
+	dc.SetRGBA(0.4, 0.4, 0.4, 0.8)
+	dc.MoveTo(-needleWidth/2, -2)
+	dc.LineTo(-1, -2)
+	dc.LineTo(-1, 2)
+	dc.LineTo(-needleWidth/2, 2)
+	dc.ClosePath()
+	dc.Fill()
+
+	// Lado direito mais claro (luz)
+	dc.SetRGBA(0.7, 0.7, 0.7, 0.8)
+	dc.MoveTo(1, -2)
+	dc.LineTo(needleWidth/2, -2)
+	dc.LineTo(needleWidth/2, 2)
+	dc.LineTo(1, 2)
+	dc.ClosePath()
+	dc.Fill()
+
+	// === CONTORNOS PARA DEFINIR MELHOR A AGULHA ===
+	// Contorno da ponta vermelha
+	dc.SetLineWidth(0.8)
+	dc.SetRGBA(0.6, 0.1, 0.1, 1) // Vermelho escuro para contorno
+	dc.MoveTo(0, -needleLength)
+	dc.LineTo(-needleWidth/2, -4)
+	dc.LineTo(needleWidth/2, -4)
+	dc.ClosePath()
+	dc.Stroke()
+
+	// Contorno da ponta branca
+	dc.SetRGBA(0.6, 0.6, 0.6, 1) // Cinza para contorno da parte branca
+	dc.MoveTo(0, needleLength)
+	dc.LineTo(-needleWidth/2, 4)
+	dc.LineTo(needleWidth/2, 4)
+	dc.ClosePath()
+	dc.Stroke()
+
+	// === LINHA CENTRAL (Vinco) ===
+	// Linha central mais escura para criar o efeito de vinco
+	dc.SetLineWidth(0.5)
+	dc.SetRGBA(0.2, 0.2, 0.2, 0.9)
+	dc.MoveTo(0, -needleLength)
+	dc.LineTo(0, needleLength)
+	dc.Stroke()
+
+	// === PONTO CENTRAL (Eixo da agulha) ===
+	// Círculo central escuro (eixo)
+	dc.SetRGBA(0.2, 0.2, 0.2, 0.9)
+	dc.DrawCircle(0, 0, 2.5)
+	dc.Fill()
+
+	// Círculo central claro (brilho no eixo)
+	dc.SetRGBA(0.8, 0.8, 0.8, 0.7)
+	dc.DrawCircle(0, 0, 1.5)
 	dc.Fill()
 
 	dc.Pop()
@@ -277,10 +348,11 @@ func (g *Generator) drawDigitalSpeed(dc *gg.Context, cx, cy, speed float64) {
 
 // drawOrbitalWidgets desenha os widgets pequenos ao redor do velocímetro principal
 func (g *Generator) drawOrbitalWidgets(dc *gg.Context, centerX, centerY float64, point gps.GPSPoint) {
-	// Distância orbital dos widgets em relação ao centro
-	orbitRadius := 145.0
+	// Distância orbital dos widgets em relação ao centro (aumentada para dar espaçamento)
+	// Velocímetro principal tem radius=90, então widgets ficam a 90+4=94 pixels de distância
+	orbitRadius := 155.0 // Aumentado de 145.0 para 155.0 (4px a mais de espaçamento)
 
-	// Configuração dos widgets orbitais
+	// Configuração dos widgets orbitais (tamanho reduzido)
 	widgets := []WidgetConfig{
 		{
 			Color: color.RGBA{R: 255, G: 69, B: 0, A: 255}, // Laranja vibrante
@@ -291,7 +363,7 @@ func (g *Generator) drawOrbitalWidgets(dc *gg.Context, centerX, centerY float64,
 			},
 			MaxValue: 2.0, // Máximo 2G para atividades normais
 			Position: 45,  // 45 graus (superior direito)
-			Size:     45,  // Raio do widget
+			Size:     35,  // Raio do widget (reduzido de 45 para 35)
 		},
 		{
 			Color: color.RGBA{R: 50, G: 205, B: 50, A: 255}, // Verde lima
@@ -310,7 +382,7 @@ func (g *Generator) drawOrbitalWidgets(dc *gg.Context, centerX, centerY float64,
 			},
 			MaxValue: 120, // RPM máximo
 			Position: 135, // 135 graus (superior esquerdo)
-			Size:     45,
+			Size:     35,  // Raio do widget (reduzido de 45 para 35)
 		},
 		{
 			Color: color.RGBA{R: 255, G: 20, B: 147, A: 255}, // Rosa vibrante
@@ -321,7 +393,7 @@ func (g *Generator) drawOrbitalWidgets(dc *gg.Context, centerX, centerY float64,
 			},
 			MaxValue: 2000, // Máximo 2000m de altitude
 			Position: 225,  // 225 graus (inferior esquerdo)
-			Size:     45,
+			Size:     35,   // Raio do widget (reduzido de 45 para 35)
 		},
 		{
 			Color: color.RGBA{R: 255, G: 0, B: 255, A: 255}, // Magenta
@@ -343,7 +415,7 @@ func (g *Generator) drawOrbitalWidgets(dc *gg.Context, centerX, centerY float64,
 			},
 			MaxValue: 180, // BPM máximo
 			Position: 315, // 315 graus (inferior direito)
-			Size:     45,
+			Size:     35,  // Raio do widget (reduzido de 45 para 35)
 		},
 	}
 
@@ -373,7 +445,7 @@ func (g *Generator) drawOrbitalWidget(dc *gg.Context, centerX, centerY, orbitRad
 	dc.Fill()
 
 	// 2. Borda colorida do widget
-	dc.SetLineWidth(3.0)
+	dc.SetLineWidth(2.5) // Reduzido de 3.0 para 2.5 para ficar proporcional
 	colorR, colorG, colorB, colorA := config.Color.RGBA()
 	dc.SetRGBA(float64(colorR)/65535, float64(colorG)/65535, float64(colorB)/65535, float64(colorA)/65535)
 	dc.DrawCircle(widgetX, widgetY, config.Size)
@@ -381,16 +453,16 @@ func (g *Generator) drawOrbitalWidget(dc *gg.Context, centerX, centerY, orbitRad
 
 	// 3. Arco de progresso interno
 	if progress > 0 {
-		dc.SetLineWidth(4.0)
+		dc.SetLineWidth(3.0) // Reduzido de 4.0 para 3.0
 		dc.SetRGBA(float64(colorR)/65535, float64(colorG)/65535, float64(colorB)/65535, 0.8)
 		startArc := gg.Radians(-90) // Começa no topo
 		endArc := startArc + (gg.Radians(360) * progress)
-		dc.DrawArc(widgetX, widgetY, config.Size-8, startArc, endArc)
+		dc.DrawArc(widgetX, widgetY, config.Size-6, startArc, endArc) // Ajustado de -8 para -6
 		dc.Stroke()
 	}
 
 	// 4. Texto do valor
-	g.loadFont(dc, 14)
+	g.loadFont(dc, 12)     // Reduzido de 14 para 12
 	dc.SetRGBA(1, 1, 1, 1) // Branco sólido
 
 	// Formata o valor baseado no tipo
@@ -403,16 +475,16 @@ func (g *Generator) drawOrbitalWidget(dc *gg.Context, centerX, centerY, orbitRad
 		valueText = fmt.Sprintf("%.0f", currentValue)
 	}
 
-	dc.DrawStringAnchored(valueText, widgetX, widgetY-5, 0.5, 0.5)
+	dc.DrawStringAnchored(valueText, widgetX, widgetY-4, 0.5, 0.5) // Ajustado de -5 para -4
 
 	// 5. Label e unidade
-	g.loadFont(dc, 8)
+	g.loadFont(dc, 7) // Reduzido de 8 para 7
 	dc.SetRGBA(0.9, 0.9, 0.9, 1)
-	dc.DrawStringAnchored(config.Label, widgetX, widgetY+8, 0.5, 0.5)
+	dc.DrawStringAnchored(config.Label, widgetX, widgetY+6, 0.5, 0.5) // Ajustado de +8 para +6
 
-	g.loadFont(dc, 7)
+	g.loadFont(dc, 6) // Reduzido de 7 para 6
 	dc.SetRGBA(0.7, 0.7, 0.7, 1)
-	dc.DrawStringAnchored(config.Unit, widgetX, widgetY+18, 0.5, 0.5)
+	dc.DrawStringAnchored(config.Unit, widgetX, widgetY+14, 0.5, 0.5) // Ajustado de +18 para +14
 }
 
 // Cleanup remove o diretório temporário.
