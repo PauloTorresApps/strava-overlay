@@ -26,6 +26,10 @@ export function GetAllGPSPoints(arg1) {
   return window['go']['main']['App']['GetAllGPSPoints'](arg1);
 }
 
+export function GetFrontendConfig() {
+  return window['go']['main']['App']['GetFrontendConfig']();
+}
+
 export function GetFullGPSTrajectory(arg1) {
   return window['go']['main']['App']['GetFullGPSTrajectory'](arg1);
 }
@@ -40,6 +44,14 @@ export function GetGPSPointForVideoTime(arg1, arg2) {
 
 export function GetGPSPointsWithDensity(arg1, arg2) {
   return window['go']['main']['App']['GetGPSPointsWithDensity'](arg1, arg2);
+}
+
+export function GetMapProviderConfig() {
+  return window['go']['main']['App']['GetMapProviderConfig']();
+}
+
+export function GetSecureAPIKeys() {
+  return window['go']['main']['App']['GetSecureAPIKeys']();
 }
 
 export function ProcessVideoOverlay(arg1, arg2, arg3) {

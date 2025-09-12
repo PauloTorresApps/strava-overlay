@@ -1,4 +1,62 @@
-console.log('🗺️ map.js carregando (versão corrigida)...');
+
+/**
+ * NOVA FUNÇÃO: Recupera chave de API do ConfigService
+ */
+function getAPIKeyFromConfig(provider) {
+    if (!window.configService || !window.configService.initialized) {
+        console.warn('⚠️ ConfigService não inicializado ainda');
+        return null;
+    }
+    
+    return window.configService.getAPIKey(provider);
+}
+
+/**
+ * NOVA FUNÇÃO: Atualiza MAP_PROVIDERS com chaves do backend
+ */
+function updateMapProvidersWithKeys() {
+    console.log('🔧 Atualizando MAP_PROVIDERS com chaves do backend...');
+    
+    // Thunderforest
+    const thunderforestKey = getAPIKeyFromConfig('thunderforest');
+   
+    if (thunderforestKey) {
+        // Adiciona novos provedores Thunderforest
+        MAP_PROVIDERS.thunderforest_outdoors = {
+            name: 'Thunderforest Outdoors',
+            url: `https://tile.thunderforest.com/outdoors/{z}/{x}/{y}.png?apikey=${thunderforestKey}`,
+            attribution: '© Thunderforest © OpenStreetMap contributors',
+            darkFilter: false
+        };
+        
+        MAP_PROVIDERS.thunderforest_landscape = {
+            name: 'Thunderforest Landscape', 
+            url: `https://tile.thunderforest.com/landscape/{z}/{x}/{y}.png?apikey=${thunderforestKey}`,
+            attribution: '© Thunderforest © OpenStreetMap contributors',
+            darkFilter: false
+        };
+        
+        console.log('✅ Provedores Thunderforest adicionados');
+    }
+    
+    // Mapbox
+    const mapboxToken = getAPIKeyFromConfig('mapbox_public');
+    if (mapboxToken) {
+        console.log('🔑 Token Mapbox encontrado, adicionando provedores...');
+        
+        // Atualiza provedores Mapbox existentes substituindo {accessToken}
+        Object.keys(MAP_PROVIDERS).forEach(key => {
+            if (MAP_PROVIDERS[key].provider === 'mapbox') {
+                MAP_PROVIDERS[key].url = MAP_PROVIDERS[key].url.replace('{accessToken}', mapboxToken);
+            }
+        });
+        
+        console.log('✅ Tokens Mapbox aplicados aos provedores existentes');
+    }
+    
+    console.log(`🗺️ MAP_PROVIDERS atualizado com ${Object.keys(MAP_PROVIDERS).length} provedores`);
+}
+
 
 /**
  * SUBSTITUA a função displayMap existente por esta versão com seletor de mapas
@@ -508,7 +566,6 @@ if (typeof window !== 'undefined') {
     window.invalidateMapSize = invalidateMapSize;
 }
 
-
 /**
  * Configurações dos diferentes tipos de mapa disponíveis - ATUALIZADO COM MAPBOX
  */
@@ -545,7 +602,7 @@ const MAP_PROVIDERS = {
     },
     cyclemap: {
         name: 'Ciclovias',
-        url: 'https://tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=f076b9bc1802408b9d665dc2f5685fac',
+        url: 'https://tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=API_KEY_AQUI',
         attribution: '© Thunderforest © OpenStreetMap contributors',
         darkFilter: false,
         requiresApiKey: false
@@ -725,10 +782,49 @@ function applyMapTheme(useDarkFilter) {
  * Adiciona seletor de camadas ao mapa com categorias organizadas
  */
 function addLayerSelector() {
-    const layerControl = L.control({ position: 'topright' });
-    
+    const layerControl = L.control({ position: 'topright' });    
     layerControl.onAdd = function() {
         const div = L.DomUtil.create('div', 'map-layer-control');
+        
+        // NOVA: Atualiza provedores antes de construir o seletor
+        updateMapProvidersWithKeys();
+        
+        // Constrói opções organizadas por categoria
+        let optionsHTML = '';
+        
+        // Categoria Esportes
+        optionsHTML += '<optgroup label="🚴 Esportes">';
+        if (MAP_PROVIDERS.cyclemap) optionsHTML += `<option value="cyclemap">${MAP_PROVIDERS.cyclemap.name}</option>`;
+        if (MAP_PROVIDERS.mapbox_outdoors) optionsHTML += `<option value="mapbox_outdoors">${MAP_PROVIDERS.mapbox_outdoors.name}</option>`;
+        if (MAP_PROVIDERS.thunderforest_outdoors) optionsHTML += `<option value="thunderforest_outdoors">${MAP_PROVIDERS.thunderforest_outdoors.name}</option>`;
+        optionsHTML += '</optgroup>';
+        
+        // Categoria Satélite
+        optionsHTML += '<optgroup label="🛰️ Satélite">';
+        if (MAP_PROVIDERS.satellite) optionsHTML += `<option value="satellite">${MAP_PROVIDERS.satellite.name}</option>`;
+        if (MAP_PROVIDERS.mapbox_satellite) optionsHTML += `<option value="mapbox_satellite">${MAP_PROVIDERS.mapbox_satellite.name}</option>`;
+        if (MAP_PROVIDERS.mapbox_satellite_streets) optionsHTML += `<option value="mapbox_satellite_streets">${MAP_PROVIDERS.mapbox_satellite_streets.name}</option>`;
+        optionsHTML += '</optgroup>';
+        
+        // Categoria Ruas
+        optionsHTML += '<optgroup label="🌐 Ruas e Navegação">';
+        if (MAP_PROVIDERS.osm) optionsHTML += `<option value="osm">${MAP_PROVIDERS.osm.name}</option>`;
+        if (MAP_PROVIDERS.mapbox_streets) optionsHTML += `<option value="mapbox_streets">${MAP_PROVIDERS.mapbox_streets.name}</option>`;
+        optionsHTML += '</optgroup>';
+        
+        // Categoria Escuro
+        optionsHTML += '<optgroup label="🌙 Modo Escuro">';
+        if (MAP_PROVIDERS.osmDark) optionsHTML += `<option value="osmDark">${MAP_PROVIDERS.osmDark.name}</option>`;
+        if (MAP_PROVIDERS.mapbox_dark) optionsHTML += `<option value="mapbox_dark">${MAP_PROVIDERS.mapbox_dark.name}</option>`;
+        if (MAP_PROVIDERS.cartodb_dark) optionsHTML += `<option value="cartodb_dark">${MAP_PROVIDERS.cartodb_dark.name}</option>`;
+        optionsHTML += '</optgroup>';
+        
+        // Categoria Terreno
+        optionsHTML += '<optgroup label="🏔️ Terreno">';
+        if (MAP_PROVIDERS.terrain) optionsHTML += `<option value="terrain">${MAP_PROVIDERS.terrain.name}</option>`;
+        if (MAP_PROVIDERS.mapbox_light) optionsHTML += `<option value="mapbox_light">${MAP_PROVIDERS.mapbox_light.name}</option>`;
+        if (MAP_PROVIDERS.thunderforest_landscape) optionsHTML += `<option value="thunderforest_landscape">${MAP_PROVIDERS.thunderforest_landscape.name}</option>`;
+        optionsHTML += '</optgroup>';
         
         div.innerHTML = `
             <div style="
@@ -761,32 +857,7 @@ function addLayerSelector() {
                     font-size: 14px;
                     margin-bottom: 10px;
                 ">
-                    <optgroup label="🚴 Esportes">
-                        <option value="cyclemap">Bike Map</option>
-                        <option value="mapbox_outdoors">Mapbox Outdoors</option>
-                    </optgroup>
-                    
-                    <optgroup label="🛰️ Satélite">
-                        <option value="satellite">Satélite (Esri)</option>
-                        <option value="mapbox_satellite">Mapbox Satellite</option>
-                        <option value="mapbox_satellite_streets">Mapbox Sat. Streets</option>
-                    </optgroup>
-                    
-                    <optgroup label="🌐 Ruas e Navegação">
-                        <option value="osm">OpenStreetMap</option>
-                        <option value="mapbox_streets">Mapbox Streets</option>
-                    </optgroup>
-                    
-                    <optgroup label="🌙 Modo Escuro">
-                        <option value="osmDark">OpenStreetMap Dark</option>
-                        <option value="mapbox_dark">Mapbox Dark</option>
-                        <option value="cartodb_dark">CartoDB Dark</option>
-                    </optgroup>
-                    
-                    <optgroup label="🏔️ Terreno">
-                        <option value="terrain">Terreno Topo</option>
-                        <option value="mapbox_light">Mapbox Light</option>
-                    </optgroup>
+                    ${optionsHTML}
                 </select>
                 
                 <div style="
@@ -795,26 +866,18 @@ function addLayerSelector() {
                     margin-bottom: 8px;
                     text-align: center;
                 ">
-                    Atual: <span id="currentMapType">OpenStreetMap</span>
+                    Atual: <span id="currentMapType">${MAP_PROVIDERS[currentMapProvider]?.name || 'OpenStreetMap'}</span>
                 </div>
                 
-                <div id="mapboxTokenSection" style="
+                <div style="
                     border-top: 1px solid var(--border-color);
                     padding-top: 8px;
                     margin-top: 8px;
+                    font-size: 11px;
+                    color: var(--secondary-text);
+                    text-align: center;
                 ">
-                    <button id="configMapboxBtn" style="
-                        width: 100%;
-                        padding: 6px;
-                        border: 1px solid var(--accent-color);
-                        border-radius: 4px;
-                        background: transparent;
-                        color: var(--accent-color);
-                        font-size: 12px;
-                        cursor: pointer;
-                    ">
-                        ⚙️ Configurar Mapbox
-                    </button>
+                    ${Object.keys(MAP_PROVIDERS).length} provedores disponíveis
                 </div>
             </div>
         `;
@@ -831,7 +894,6 @@ function addLayerSelector() {
     setTimeout(() => {
         const selector = document.getElementById('mapTypeSelector');
         const currentTypeLabel = document.getElementById('currentMapType');
-        const configMapboxBtn = document.getElementById('configMapboxBtn');
         
         if (selector) {
             selector.value = currentMapProvider;
@@ -841,20 +903,37 @@ function addLayerSelector() {
                 addTileLayer(newProvider);
                 
                 if (currentTypeLabel) {
-                    currentTypeLabel.textContent = MAP_PROVIDERS[newProvider].name;
+                    currentTypeLabel.textContent = MAP_PROVIDERS[newProvider]?.name || newProvider;
                 }
                 
                 // Salva preferência
                 localStorage.setItem('preferredMapType', newProvider);
             });
         }
-        
-        if (configMapboxBtn) {
-            configMapboxBtn.addEventListener('click', showMapboxTokenModal);
-        }
     }, 100);
 }
 
+/**
+ * NOVA FUNÇÃO: Inicializa map.js com chaves do ConfigService
+ */
+function initializeMapWithConfigService() {
+    console.log('🗺️ Inicializando map.js com ConfigService...');
+    
+    // Se ConfigService ainda não está pronto, aguarda
+    if (!window.configService || !window.configService.initialized) {
+        console.log('⏳ Aguardando ConfigService...');
+        setTimeout(initializeMapWithConfigService, 500);
+        return;
+    }
+    
+    // Atualiza provedores com chaves do backend
+    
+    console.log('✅ map.js inicializado com ConfigService');
+    window.MAP_PROVIDERS = MAP_PROVIDERS;
+
+
+    updateMapProvidersWithKeys();
+}
 
 /**
  * Modal para configuração do token do Mapbox
@@ -1133,4 +1212,9 @@ window.changeMapType = changeMapType;
 window.setMapboxToken = setMapboxToken;
 window.showMapboxTokenModal = showMapboxTokenModal;
 window.testMapboxToken = testMapboxToken;
-window.MAP_PROVIDERS = MAP_PROVIDERS;
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeMapWithConfigService);
+} else {
+    initializeMapWithConfigService();
+}

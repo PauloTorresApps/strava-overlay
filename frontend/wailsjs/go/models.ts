@@ -66,6 +66,34 @@ export namespace handlers {
 		    return a;
 		}
 	}
+	export class FrontendConfig {
+	    thunderforest_api_key?: string;
+	    mapbox_public_token?: string;
+	    app_version: string;
+	    environment: string;
+	    strava_api_url: string;
+	    thunderforest_url: string;
+	    mapbox_api_url: string;
+	    default_map_provider: string;
+	    available_providers: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new FrontendConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.thunderforest_api_key = source["thunderforest_api_key"];
+	        this.mapbox_public_token = source["mapbox_public_token"];
+	        this.app_version = source["app_version"];
+	        this.environment = source["environment"];
+	        this.strava_api_url = source["strava_api_url"];
+	        this.thunderforest_url = source["thunderforest_url"];
+	        this.mapbox_api_url = source["mapbox_api_url"];
+	        this.default_map_provider = source["default_map_provider"];
+	        this.available_providers = source["available_providers"];
+	    }
+	}
 	export class FrontendGPSPoint {
 	    time: string;
 	    lat: number;

@@ -15,6 +15,8 @@ export function GetActivityDetail(arg1:number):Promise<strava.ActivityDetail>;
 
 export function GetAllGPSPoints(arg1:number):Promise<Array<handlers.FrontendGPSPoint>>;
 
+export function GetFrontendConfig():Promise<handlers.FrontendConfig>;
+
 export function GetFullGPSTrajectory(arg1:number):Promise<Array<handlers.FrontendGPSPoint>>;
 
 export function GetGPSPointForMapClick(arg1:number,arg2:number,arg3:number):Promise<handlers.FrontendGPSPoint>;
@@ -22,6 +24,10 @@ export function GetGPSPointForMapClick(arg1:number,arg2:number,arg3:number):Prom
 export function GetGPSPointForVideoTime(arg1:number,arg2:string):Promise<handlers.FrontendGPSPoint>;
 
 export function GetGPSPointsWithDensity(arg1:number,arg2:string):Promise<Array<handlers.FrontendGPSPoint>>;
+
+export function GetMapProviderConfig():Promise<Record<string, any>>;
+
+export function GetSecureAPIKeys():Promise<Record<string, string>>;
 
 export function ProcessVideoOverlay(arg1:number,arg2:string,arg3:string):Promise<string>;
 

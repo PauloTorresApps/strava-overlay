@@ -25,6 +25,7 @@ type App struct {
 	activityHandler *handlers.ActivityHandler
 	videoHandler    *handlers.VideoHandler
 	gpsHandler      *handlers.GPSHandler
+	configHandler   *handlers.ConfigHandler // NOVO: Handler de configuração
 
 	// Services - Responsáveis por operações complexas
 	videoService *services.VideoService
@@ -60,6 +61,7 @@ func NewApp() *App {
 	app.activityHandler = handlers.NewActivityHandler(app.getStravaClient)
 	app.videoHandler = handlers.NewVideoHandler(app.getStravaClient, videoService, gpsService)
 	app.gpsHandler = handlers.NewGPSHandler(app.getStravaClient, gpsService)
+	app.configHandler = handlers.NewConfigHandler() // NOVO: Inicializa config handler
 
 	return app
 }
@@ -84,6 +86,23 @@ func (a *App) SelectVideoFile() (string, error) {
 		Title:   "Selecione um arquivo de vídeo",
 		Filters: []runtime.FileFilter{{DisplayName: "Vídeos (*.mp4, *.mov,*.MP4)", Pattern: "*.mp4;*.mov;*.MP4"}},
 	})
+}
+
+// === NOVOS MÉTODOS DE CONFIGURAÇÃO ===
+
+// GetFrontendConfig retorna configurações seguras para o frontend
+func (a *App) GetFrontendConfig() *handlers.FrontendConfig {
+	return a.configHandler.GetFrontendConfig()
+}
+
+// GetSecureAPIKeys retorna chaves de API seguras para o frontend
+func (a *App) GetSecureAPIKeys() map[string]string {
+	return a.configHandler.GetSecureAPIKeys()
+}
+
+// GetMapProviderConfig retorna configuração de provedores de mapa
+func (a *App) GetMapProviderConfig() map[string]interface{} {
+	return a.configHandler.GetMapProviderConfig()
 }
 
 // === MÉTODOS QUE DELEGAM PARA OS HANDLERS ===

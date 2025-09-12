@@ -1,11 +1,22 @@
-console.log('🚀 app.js carregando (versão corrigida)...');
+console.log('🚀 app.js carregando (versão com config)...');
 
 /**
  * Função de inicialização principal da aplicação.
  * É chamada quando o DOM está completamente carregado.
  */
-function initApp() {
+async function initApp() {
     console.log('🚀 Strava Add Overlay iniciado');
+    
+    // NOVO: Inicializa configurações ANTES de tudo
+    try {
+        console.log('⚙️ Inicializando configurações...');
+        await window.initializeConfig();
+        console.log('✅ Configurações inicializadas com sucesso');
+    } catch (error) {
+        console.error('❌ Erro ao inicializar configurações:', error);
+        console.log('🔄 Continuando com configurações padrão...');
+    }
+    
     initializeDOMElements();
     addEventListeners();
     
@@ -223,12 +234,31 @@ function setupMapVisibilityObserver() {
     observer.observe(mapContainer);
 }
 
+/**
+ * NOVA FUNÇÃO: Mostra informações de configuração na tela (para debug)
+ */
+function showConfigInfo() {
+    if (window.configService && window.configService.initialized) {
+        const config = window.configService.getConfig();
+        console.group('📋 Informações de Configuração');
+        console.log('Versão da App:', config.app_version);
+        console.log('Ambiente:', config.environment);
+        console.log('Provedores disponíveis:', window.configService.getAvailableProviders());
+        console.log('Thunderforest disponível:', window.configService.isProviderAvailable('thunderforest'));
+        console.log('Mapbox disponível:', window.configService.isProviderAvailable('mapbox'));
+        console.groupEnd();
+    }
+}
+
 // --- Ponto de Entrada ---
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
     
     // Configura observador do mapa após inicialização
     setTimeout(setupMapVisibilityObserver, 1000);
+    
+    // NOVO: Mostra informações de config após 2 segundos (para debug)
+    setTimeout(showConfigInfo, 2000);
 });
 
 // Adiciona handlers globais para depuração
@@ -240,4 +270,5 @@ window.addEventListener('error', (event) => {
 if (typeof window !== 'undefined') {
     window.forceMapUpdate = forceMapUpdate;
     window.selectedActivity = selectedActivity;
+    window.showConfigInfo = showConfigInfo;
 }

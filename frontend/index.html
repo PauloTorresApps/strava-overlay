@@ -305,6 +305,26 @@
                 grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); /* Ainda menor em telas grandes */
             }
         }
+
+        /* NOVO: Indicador de configuração */
+        .config-indicator {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: var(--container-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 0.8rem;
+            color: var(--secondary-text);
+            z-index: 1000;
+            opacity: 0.8;
+        }
+
+        .config-indicator.loaded {
+            color: var(--success-text);
+            border-color: var(--success-border);
+        }
     </style>
 </head>
 <body>
@@ -362,14 +382,43 @@
         </section>
     </div>
 
-    <!-- Scripts Modulares -->
+    <!-- NOVO: Indicador de configuração -->
+    <div id="configIndicator" class="config-indicator">
+        ⚙️ Carregando configurações...
+    </div>
+
+    <!-- Scripts Modulares - ORDEM IMPORTANTE! -->
     <script src="js/globals.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/ui.js"></script>
+    <script src="js/config.js"></script> <!-- NOVO: Deve vir antes dos outros -->
     <script src="js/auth.js"></script>
     <script src="js/activities.js"></script>
     <script src="js/map.js"></script>
     <script src="js/video.js"></script>
-    <script src="js/app.js"></script>
+    <script src="js/app.js"></script> <!-- Por último -->
+    
+    <script>
+        // NOVO: Atualiza indicador de configuração
+        document.addEventListener('DOMContentLoaded', function() {
+            const indicator = document.getElementById('configIndicator');
+            
+            // Remove após 5 segundos ou quando config estiver carregada
+            setTimeout(() => {
+                if (window.configService && window.configService.initialized) {
+                    indicator.textContent = '✅ Configurações carregadas';
+                    indicator.classList.add('loaded');
+                } else {
+                    indicator.textContent = '⚠️ Configurações padrão';
+                }
+                
+                // Remove após mais 3 segundos
+                setTimeout(() => {
+                    indicator.style.opacity = '0';
+                    setTimeout(() => indicator.remove(), 300);
+                }, 3000);
+            }, 5000);
+        });
+    </script>
 </body>
 </html>
