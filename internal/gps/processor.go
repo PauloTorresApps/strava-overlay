@@ -254,13 +254,26 @@ func (si *SpatialIndex) findNearestPoint(targetLat, targetLng float64) (GPSPoint
 	return closestPoint, found
 }
 
-// calculateDerivedValues calcula bearing e G-force para os pontos
+// calculateDerivedValues calcula bearing e G-force para os pontos - VERSÃO MELHORADA
 func (gp *GPSProcessor) calculateDerivedValues(points []GPSPoint) {
+	if len(points) < 2 {
+		return
+	}
+
 	for i := 1; i < len(points); i++ {
 		prevPoint := points[i-1]
 		currentPoint := &points[i]
 
-		currentPoint.Bearing = gp.calculateBearing(prevPoint, *currentPoint)
+		// Calcula bearing apenas se há movimento significativo
+		distance := gp.calculateDistanceBetweenPoints(prevPoint, *currentPoint)
+		if distance > 1.0 { // Só calcula bearing se moveu mais de 1 metro
+			currentPoint.Bearing = gp.calculateBearing(prevPoint, *currentPoint)
+		} else {
+			// Se não houve movimento significativo, mantém o bearing anterior
+			currentPoint.Bearing = prevPoint.Bearing
+		}
+
+		// Calcula G-force
 		currentPoint.GForce = gp.calculateGForce(prevPoint, *currentPoint)
 	}
 
@@ -269,6 +282,24 @@ func (gp *GPSProcessor) calculateDerivedValues(points []GPSPoint) {
 		points[0].Bearing = points[1].Bearing
 		points[0].GForce = points[1].GForce
 	}
+}
+
+// calculateDistanceBetweenPoints calcula distância entre dois pontos GPS
+func (gp *GPSProcessor) calculateDistanceBetweenPoints(p1, p2 GPSPoint) float64 {
+	const R = 6371000 // Raio da Terra em metros
+
+	lat1Rad := p1.Lat * math.Pi / 180
+	lon1Rad := p1.Lng * math.Pi / 180
+	lat2Rad := p2.Lat * math.Pi / 180
+	lon2Rad := p2.Lng * math.Pi / 180
+
+	dLat := lat2Rad - lat1Rad
+	dLon := lon2Rad - lon1Rad
+
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) + math.Cos(lat1Rad)*math.Cos(lat2Rad)*math.Sin(dLon/2)*math.Sin(dLon/2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+
+	return R * c
 }
 
 // interpolatePointsOptimized - versão otimizada da interpolação
@@ -333,35 +364,39 @@ func (gp *GPSProcessor) interpolatePointsOptimized(points []GPSPoint) []GPSPoint
 	return interpolated
 }
 
-// interpolateBearing interpola bearing considerando o wraparound de 0-360 graus
+// interpolateBearing interpola bearing considerando o wraparound de 0-360 graus - VERSÃO CORRIGIDA
 func (gp *GPSProcessor) interpolateBearing(bearing1, bearing2, ratio float64) float64 {
+	// Normaliza os bearings para 0-360
+	bearing1 = math.Mod(bearing1+360, 360)
+	bearing2 = math.Mod(bearing2+360, 360)
+
 	diff := bearing2 - bearing1
 
-	// Ajusta para o caminho mais curto
-	if diff > 180 {
-		diff -= 360
-	} else if diff < -180 {
-		diff += 360
+	// Escolhe o caminho mais curto (importante para a interpolação suave)
+	if math.Abs(diff) > 180 {
+		if diff > 0 {
+			diff -= 360
+		} else {
+			diff += 360
+		}
 	}
 
+	// Interpola linearmente
 	result := bearing1 + ratio*diff
 
-	// Normaliza para 0-360
-	if result < 0 {
-		result += 360
-	} else if result >= 360 {
-		result -= 360
-	}
+	// Normaliza o resultado para 0-360
+	result = math.Mod(result+360, 360)
 
 	return result
 }
 
+// ProcessStreamData - VERSÃO CORRIGIDA com melhor handling do bearing
 func (gp *GPSProcessor) ProcessStreamData(timeData, latlngData, velocityData, altitudeData []interface{}, startTime time.Time) error {
 	if len(timeData) != len(latlngData) {
 		return fmt.Errorf("data length mismatch: time=%d, latlng=%d", len(timeData), len(latlngData))
 	}
 
-	log.Printf("DEBUG: Processando %d pontos GPS", len(timeData))
+	log.Printf("DEBUG: Processando %d pontos GPS com bearing corrigido", len(timeData))
 	rawPoints := make([]GPSPoint, 0, len(timeData))
 
 	validPoints := 0
@@ -391,6 +426,7 @@ func (gp *GPSProcessor) ProcessStreamData(timeData, latlngData, velocityData, al
 			Lng:  lng,
 		}
 
+		// Adiciona dados opcionais
 		if velocityData != nil && i < len(velocityData) && velocityData[i] != nil {
 			if vel, ok := velocityData[i].(float64); ok && !math.IsNaN(vel) {
 				point.Velocity = vel
@@ -403,12 +439,6 @@ func (gp *GPSProcessor) ProcessStreamData(timeData, latlngData, velocityData, al
 			}
 		}
 
-		if len(rawPoints) > 0 {
-			prevPoint := rawPoints[len(rawPoints)-1]
-			point.Bearing = gp.calculateBearing(prevPoint, point)
-			point.GForce = gp.calculateGForce(prevPoint, point)
-		}
-
 		rawPoints = append(rawPoints, point)
 		validPoints++
 	}
@@ -417,9 +447,13 @@ func (gp *GPSProcessor) ProcessStreamData(timeData, latlngData, velocityData, al
 		return fmt.Errorf("nenhum ponto GPS válido encontrado")
 	}
 
+	// CORREÇÃO: Calcula bearing e G-force usando função melhorada
+	gp.calculateDerivedValues(rawPoints)
+
 	// Interpola os pontos para criar uma transição suave
 	gp.points = gp.interpolatePoints(rawPoints)
-	log.Printf("DEBUG: %d pontos GPS válidos processados, resultando em %d pontos após interpolação", validPoints, len(gp.points))
+
+	log.Printf("DEBUG: %d pontos GPS válidos processados, resultando em %d pontos após interpolação com bearing corrigido", validPoints, len(gp.points))
 
 	return nil
 }
@@ -500,16 +534,31 @@ func (gp *GPSProcessor) GetPointsForTimeRange(startTime, endTime time.Time) []GP
 	return result
 }
 
+// calculateBearing calcula o bearing (direção) entre dois pontos GPS usando a fórmula correta
 func (gp *GPSProcessor) calculateBearing(from, to GPSPoint) float64 {
+	// Converte coordenadas para radianos
 	lat1 := from.Lat * math.Pi / 180
 	lat2 := to.Lat * math.Pi / 180
-	deltaLng := (to.Lng - from.Lng) * math.Pi / 180
+	lon1 := from.Lng * math.Pi / 180
+	lon2 := to.Lng * math.Pi / 180
 
-	y := math.Sin(deltaLng) * math.Cos(lat2)
-	x := math.Cos(lat1)*math.Sin(lat2) - math.Sin(lat1)*math.Cos(lat2)*math.Cos(deltaLng)
+	// Calcula a diferença de longitude
+	deltaLon := lon2 - lon1
 
-	bearing := math.Atan2(y, x) * 180 / math.Pi
-	return math.Mod(bearing+360, 360)
+	// Fórmula do bearing: θ = atan2(sin(Δλ)⋅cos(φ2), cos(φ1)⋅sin(φ2) − sin(φ1)⋅cos(φ2)⋅cos(Δλ))
+	y := math.Sin(deltaLon) * math.Cos(lat2)
+	x := math.Cos(lat1)*math.Sin(lat2) - math.Sin(lat1)*math.Cos(lat2)*math.Cos(deltaLon)
+
+	// Calcula o bearing em radianos
+	bearingRad := math.Atan2(y, x)
+
+	// Converte para graus
+	bearingDeg := bearingRad * 180 / math.Pi
+
+	// Normaliza para 0-360 graus (sentido horário a partir do norte)
+	bearing := math.Mod(bearingDeg+360, 360)
+
+	return bearing
 }
 
 func (gp *GPSProcessor) calculateGForce(from, to GPSPoint) float64 {

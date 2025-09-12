@@ -35,11 +35,12 @@ func (s *GPSService) GetGPSPointForVideoTime(client *strava.Client, activityID i
 	// Correção de fuso horário
 	correctedVideoStartTime := s.correctVideoTimeZone(videoMeta.CreationTime, detail.Timezone)
 
-	// Debug
-	fmt.Printf("=== SINCRONIZAÇÃO GPS-VÍDEO ===\n")
-	fmt.Printf("Vídeo (UTC): %s\n", videoMeta.CreationTime.Format("15:04:05"))
-	fmt.Printf("Vídeo (corrigido): %s\n", correctedVideoStartTime.Format("15:04:05"))
-	fmt.Printf("Atividade: %s\n", detail.StartDate.Format("15:04:05"))
+	// Debug melhorado
+	fmt.Printf("=== SINCRONIZAÇÃO GPS-VÍDEO (VERSÃO CORRIGIDA) ===\n")
+	fmt.Printf("Vídeo (UTC original): %s\n", videoMeta.CreationTime.Format("15:04:05 MST"))
+	fmt.Printf("Vídeo (fuso corrigido): %s\n", correctedVideoStartTime.Format("15:04:05 MST"))
+	fmt.Printf("Atividade início: %s\n", detail.StartDate.Format("15:04:05 MST"))
+	fmt.Printf("Diferença temporal: %.1f segundos\n", correctedVideoStartTime.Sub(detail.StartDate).Seconds())
 
 	streams, err := client.GetActivityStreams(activityID)
 	if err != nil {
