@@ -1,4 +1,4 @@
-export namespace main {
+export namespace handlers {
 	
 	export class AuthStatus {
 	    is_authenticated: boolean;
