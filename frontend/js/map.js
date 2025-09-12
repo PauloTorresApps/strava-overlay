@@ -510,20 +510,20 @@ if (typeof window !== 'undefined') {
 
 
 /**
- * Configurações dos diferentes tipos de mapa disponíveis
+ * Configurações dos diferentes tipos de mapa disponíveis - ATUALIZADO COM MAPBOX
  */
 const MAP_PROVIDERS = {
     osm: {
         name: 'OpenStreetMap',
         url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
         attribution: '© OpenStreetMap contributors',
-        darkFilter: false // Aplica filtro dark
+        darkFilter: false
     },
     osmDark: {
         name: 'OpenStreetMap Dark',
         url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
         attribution: '© OpenStreetMap contributors',
-        darkFilter: true // Aplica filtro dark
+        darkFilter: true
     },
     satellite: {
         name: 'Satélite (Esri)',
@@ -537,17 +537,11 @@ const MAP_PROVIDERS = {
         attribution: '© OpenTopoMap (CC-BY-SA)',
         darkFilter: false
     },
-    dark: {
-        name: 'Dark Mode',
-        url: 'https://tiles.stadiamaps.com/styles/alidade_smooth_dark.json?api_key=API_KEY',
-        attribution: '© Stadia Maps © OpenMapTiles © OpenStreetMap contributors',
-        darkFilter: false
-    },
     cartodb_dark: {
         name: 'CartoDB Dark',
         url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
         attribution: '© OpenStreetMap © CartoDB',
-        darkFilter: true
+        darkFilter: false
     },
     cyclemap: {
         name: 'Ciclovias',
@@ -555,11 +549,83 @@ const MAP_PROVIDERS = {
         attribution: '© Thunderforest © OpenStreetMap contributors',
         darkFilter: false,
         requiresApiKey: false
+    },
+    // === MAPBOX STYLES ===
+    mapbox_streets: {
+        name: 'Mapbox Streets',
+        url: 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token={accessToken}',
+        attribution: '© Mapbox © OpenStreetMap contributors',
+        darkFilter: false,
+        requiresApiKey: true,
+        provider: 'mapbox'
+    },
+    mapbox_satellite: {
+        name: 'Mapbox Satellite',
+        url: 'https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token={accessToken}',
+        attribution: '© Mapbox © OpenStreetMap contributors',
+        darkFilter: false,
+        requiresApiKey: true,
+        provider: 'mapbox'
+    },
+    mapbox_satellite_streets: {
+        name: 'Mapbox Satellite Streets',
+        url: 'https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token={accessToken}',
+        attribution: '© Mapbox © OpenStreetMap contributors',
+        darkFilter: false,
+        requiresApiKey: true,
+        provider: 'mapbox'
+    },
+    mapbox_outdoors: {
+        name: 'Mapbox Outdoors',
+        url: 'https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/tiles/{z}/{x}/{y}?access_token={accessToken}',
+        attribution: '© Mapbox © OpenStreetMap contributors',
+        darkFilter: false,
+        requiresApiKey: true,
+        provider: 'mapbox'
+    },
+    mapbox_dark: {
+        name: 'Mapbox Dark',
+        url: 'https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/{z}/{x}/{y}?access_token={accessToken}',
+        attribution: '© Mapbox © OpenStreetMap contributors',
+        darkFilter: false,
+        requiresApiKey: true,
+        provider: 'mapbox'
+    },
+    mapbox_light: {
+        name: 'Mapbox Light',
+        url: 'https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/{z}/{x}/{y}?access_token={accessToken}',
+        attribution: '© Mapbox © OpenStreetMap contributors',
+        darkFilter: false,
+        requiresApiKey: true,
+        provider: 'mapbox'
     }
 };
 
 let currentMapProvider = 'osm'; // Padrão
 let currentTileLayer = null;
+let mapboxAccessToken = null;
+
+/**
+ * Configuração do token do Mapbox
+ */
+function setMapboxToken(token) {
+    mapboxAccessToken = token;
+    // Salva o token no localStorage para uso futuro
+    localStorage.setItem('mapbox_token', token);
+    console.log('🗺️ Token do Mapbox configurado');
+}
+
+/**
+ * Carrega o token do Mapbox do localStorage
+ */
+function loadMapboxToken() {
+    const savedToken = localStorage.getItem('mapbox_token');
+    if (savedToken) {
+        mapboxAccessToken = savedToken;
+        console.log('🗺️ Token do Mapbox carregado do localStorage');
+    }
+    return savedToken;
+}
 
 /**
  * Inicializa o mapa com seletor de camadas
@@ -580,7 +646,7 @@ function initializeMapWithLayerControl(activity) {
 }
 
 /**
- * Adiciona camada de tiles ao mapa
+ * Adiciona camada de tiles ao mapa com suporte ao Mapbox
  */
 function addTileLayer(providerKey) {
     const provider = MAP_PROVIDERS[providerKey];
@@ -590,16 +656,45 @@ function addTileLayer(providerKey) {
         return;
     }
     
+    // Verifica se é um provedor Mapbox e se temos token
+    if (provider.provider === 'mapbox') {
+        if (!mapboxAccessToken) {
+            console.warn('⚠️ Token do Mapbox não configurado. Tentando carregar...');
+            loadMapboxToken();
+            
+            if (!mapboxAccessToken) {
+                showMapboxTokenModal();
+                return;
+            }
+        }
+    }
+    
     // Remove camada anterior se existir
     if (currentTileLayer) {
         activityMap.removeLayer(currentTileLayer);
     }
     
+    // Prepara URL com token se necessário
+    let tileUrl = provider.url;
+    if (provider.provider === 'mapbox' && mapboxAccessToken) {
+        tileUrl = tileUrl.replace('{accessToken}', mapboxAccessToken);
+    }
+    
     // Cria nova camada
-    currentTileLayer = L.tileLayer(provider.url, {
+    const tileOptions = {
         attribution: provider.attribution,
-        maxZoom: 18
-    });
+        maxZoom: 18,
+        tileSize: 512,
+        zoomOffset: -1
+    };
+    
+    // Ajusta configurações específicas do Mapbox
+    if (provider.provider === 'mapbox') {
+        tileOptions.tileSize = 512;
+        tileOptions.zoomOffset = -1;
+    }
+    
+    currentTileLayer = L.tileLayer(tileUrl, tileOptions);
     
     // Adiciona ao mapa
     currentTileLayer.addTo(activityMap);
@@ -627,7 +722,7 @@ function applyMapTheme(useDarkFilter) {
 }
 
 /**
- * Adiciona seletor de camadas ao mapa
+ * Adiciona seletor de camadas ao mapa com categorias organizadas
  */
 function addLayerSelector() {
     const layerControl = L.control({ position: 'topright' });
@@ -640,42 +735,86 @@ function addLayerSelector() {
                 background: rgba(22, 27, 34, 0.95);
                 border: 1px solid var(--border-color);
                 border-radius: 8px;
-                padding: 10px;
+                padding: 12px;
                 backdrop-filter: blur(10px);
-                min-width: 160px;
+                min-width: 200px;
+                max-height: 400px;
+                overflow-y: auto;
             ">
                 <div style="
                     font-weight: bold; 
-                    margin-bottom: 8px; 
+                    margin-bottom: 10px; 
                     color: var(--primary-text); 
-                    font-size: 13px;
+                    font-size: 14px;
+                    text-align: center;
                 ">
-                    🗺️ Tipo de Mapa
+                    🗺️ Provedor de Mapa
                 </div>
+                
                 <select id="mapTypeSelector" style="
                     width: 100%;
-                    padding: 6px;
+                    padding: 8px;
                     border: 1px solid var(--border-color);
                     border-radius: 4px;
                     background: var(--container-bg);
                     color: var(--font-select-color);
                     font-size: 14px;
+                    margin-bottom: 10px;
                 ">
-                    <option value="cyclemap">Bike Map</option>
-                    <option value="osm">OpenStreetMap</option>
-                    <option value="osmDark">OpenStreetMap Dark</option>
-                    <option value="dark">Dark Mode</option>
-                    <option value="satellite">Satélite</option>
-                    <option value="terrain">Terreno</option>
-                    <option value="cartodb_dark">CartoDB Dark</option>
+                    <optgroup label="🚴 Esportes">
+                        <option value="cyclemap">Bike Map</option>
+                        <option value="mapbox_outdoors">Mapbox Outdoors</option>
+                    </optgroup>
+                    
+                    <optgroup label="🛰️ Satélite">
+                        <option value="satellite">Satélite (Esri)</option>
+                        <option value="mapbox_satellite">Mapbox Satellite</option>
+                        <option value="mapbox_satellite_streets">Mapbox Sat. Streets</option>
+                    </optgroup>
+                    
+                    <optgroup label="🌐 Ruas e Navegação">
+                        <option value="osm">OpenStreetMap</option>
+                        <option value="mapbox_streets">Mapbox Streets</option>
+                    </optgroup>
+                    
+                    <optgroup label="🌙 Modo Escuro">
+                        <option value="osmDark">OpenStreetMap Dark</option>
+                        <option value="mapbox_dark">Mapbox Dark</option>
+                        <option value="cartodb_dark">CartoDB Dark</option>
+                    </optgroup>
+                    
+                    <optgroup label="🏔️ Terreno">
+                        <option value="terrain">Terreno Topo</option>
+                        <option value="mapbox_light">Mapbox Light</option>
+                    </optgroup>
                 </select>
+                
                 <div style="
-                    font-size: 14px; 
+                    font-size: 12px; 
                     color: var(--success-text);
-                    margin-top: 4px;
+                    margin-bottom: 8px;
                     text-align: center;
                 ">
                     Atual: <span id="currentMapType">OpenStreetMap</span>
+                </div>
+                
+                <div id="mapboxTokenSection" style="
+                    border-top: 1px solid var(--border-color);
+                    padding-top: 8px;
+                    margin-top: 8px;
+                ">
+                    <button id="configMapboxBtn" style="
+                        width: 100%;
+                        padding: 6px;
+                        border: 1px solid var(--accent-color);
+                        border-radius: 4px;
+                        background: transparent;
+                        color: var(--accent-color);
+                        font-size: 12px;
+                        cursor: pointer;
+                    ">
+                        ⚙️ Configurar Mapbox
+                    </button>
                 </div>
             </div>
         `;
@@ -688,10 +827,11 @@ function addLayerSelector() {
     
     layerControl.addTo(activityMap);
     
-    // Adiciona event listener após um delay
+    // Adiciona event listeners após um delay
     setTimeout(() => {
         const selector = document.getElementById('mapTypeSelector');
         const currentTypeLabel = document.getElementById('currentMapType');
+        const configMapboxBtn = document.getElementById('configMapboxBtn');
         
         if (selector) {
             selector.value = currentMapProvider;
@@ -708,11 +848,172 @@ function addLayerSelector() {
                 localStorage.setItem('preferredMapType', newProvider);
             });
         }
+        
+        if (configMapboxBtn) {
+            configMapboxBtn.addEventListener('click', showMapboxTokenModal);
+        }
     }, 100);
 }
 
+
 /**
- * Carrega preferência salva do usuário
+ * Modal para configuração do token do Mapbox
+ */
+function showMapboxTokenModal() {
+    // Remove modal existente se houver
+    const existingModal = document.getElementById('mapboxModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    const modal = document.createElement('div');
+    modal.id = 'mapboxModal';
+    modal.innerHTML = `
+        <div style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        ">
+            <div style="
+                background: var(--container-bg);
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                padding: 24px;
+                max-width: 500px;
+                width: 90%;
+            ">
+                <h3 style="
+                    margin: 0 0 16px 0;
+                    color: var(--primary-text);
+                    text-align: center;
+                ">
+                    🗺️ Configuração do Mapbox
+                </h3>
+                
+                <p style="
+                    color: var(--secondary-text);
+                    margin-bottom: 16px;
+                    line-height: 1.5;
+                ">
+                    Para usar os mapas do Mapbox, você precisa de um token de acesso. 
+                    <a href="https://account.mapbox.com/access-tokens/" target="_blank" 
+                       style="color: var(--accent-color);">
+                        Obtenha seu token gratuito aqui
+                    </a>
+                </p>
+                
+                <div style="margin-bottom: 16px;">
+                    <label style="
+                        display: block;
+                        margin-bottom: 8px;
+                        color: var(--primary-text);
+                        font-weight: 500;
+                    ">
+                        Token de Acesso do Mapbox:
+                    </label>
+                    <input type="text" id="mapboxTokenInput" placeholder="pk.eyJ1..." style="
+                        width: 100%;
+                        padding: 12px;
+                        border: 1px solid var(--border-color);
+                        border-radius: 4px;
+                        background: var(--bg-color);
+                        color: var(--primary-text);
+                        font-family: monospace;
+                    ">
+                </div>
+                
+                <div style="
+                    display: flex;
+                    gap: 12px;
+                    justify-content: flex-end;
+                ">
+                    <button id="cancelMapboxBtn" style="
+                        padding: 10px 20px;
+                        border: 1px solid var(--border-color);
+                        border-radius: 4px;
+                        background: transparent;
+                        color: var(--secondary-text);
+                        cursor: pointer;
+                    ">
+                        Cancelar
+                    </button>
+                    <button id="saveMapboxBtn" style="
+                        padding: 10px 20px;
+                        border: none;
+                        border-radius: 4px;
+                        background: var(--accent-color);
+                        color: white;
+                        cursor: pointer;
+                        font-weight: 500;
+                    ">
+                        Salvar Token
+                    </button>
+                </div>
+                
+                <div style="
+                    margin-top: 16px;
+                    padding-top: 16px;
+                    border-top: 1px solid var(--border-color);
+                    font-size: 12px;
+                    color: var(--secondary-text);
+                    text-align: center;
+                ">
+                    💡 O Mapbox oferece 50.000 visualizações gratuitas por mês
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Preenche com token existente se houver
+    const tokenInput = document.getElementById('mapboxTokenInput');
+    if (mapboxAccessToken) {
+        tokenInput.value = mapboxAccessToken;
+    }
+    
+    // Event listeners
+    document.getElementById('cancelMapboxBtn').addEventListener('click', () => {
+        modal.remove();
+    });
+    
+    document.getElementById('saveMapboxBtn').addEventListener('click', () => {
+        const token = tokenInput.value.trim();
+        if (token) {
+            if (token.startsWith('pk.')) {
+                setMapboxToken(token);
+                modal.remove();
+                // Mostra mensagem de sucesso
+                showMessage(result, '✅ Token do Mapbox configurado com sucesso!', 'success');
+            } else {
+                alert('⚠️ Token inválido. O token do Mapbox deve começar com "pk."');
+            }
+        } else {
+            alert('⚠️ Por favor, insira um token válido.');
+        }
+    });
+    
+    // Fecha modal clicando fora
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+    
+    // Foca no input
+    tokenInput.focus();
+}
+
+
+/**
+ * Carrega preferência salva do usuário e token do Mapbox
  */
 function loadMapPreference() {
     const saved = localStorage.getItem('preferredMapType');
@@ -720,8 +1021,10 @@ function loadMapPreference() {
         currentMapProvider = saved;
         console.log(`📦 Preferência de mapa carregada: ${MAP_PROVIDERS[saved].name}`);
     }
+    
+    // Carrega token do Mapbox
+    loadMapboxToken();
 }
-
 /**
  * Versão atualizada da função displayMap para usar o novo sistema
  */
@@ -779,6 +1082,32 @@ async function displayMapWithLayerControl(activity) {
     }
 }
 
+// Função para testar se o token do Mapbox está funcionando
+function testMapboxToken() {
+    if (!mapboxAccessToken) {
+        console.log('❌ Nenhum token do Mapbox configurado');
+        return false;
+    }
+    
+    // Testa fazendo uma requisição simples
+    const testUrl = `https://api.mapbox.com/styles/v1/mapbox/streets-v12?access_token=${mapboxAccessToken}`;
+    
+    fetch(testUrl)
+        .then(response => {
+            if (response.ok) {
+                console.log('✅ Token do Mapbox válido');
+                return true;
+            } else {
+                console.log('❌ Token do Mapbox inválido');
+                return false;
+            }
+        })
+        .catch(error => {
+            console.error('❌ Erro ao testar token do Mapbox:', error);
+            return false;
+        });
+}
+
 /**
  * Função de conveniência para alterar mapa via código
  */
@@ -801,4 +1130,7 @@ function changeMapType(providerKey) {
 
 // Expõe funções globalmente para fácil uso
 window.changeMapType = changeMapType;
+window.setMapboxToken = setMapboxToken;
+window.showMapboxTokenModal = showMapboxTokenModal;
+window.testMapboxToken = testMapboxToken;
 window.MAP_PROVIDERS = MAP_PROVIDERS;
