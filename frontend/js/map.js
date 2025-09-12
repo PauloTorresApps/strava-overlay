@@ -517,6 +517,12 @@ const MAP_PROVIDERS = {
         name: 'OpenStreetMap',
         url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
         attribution: '© OpenStreetMap contributors',
+        darkFilter: false // Aplica filtro dark
+    },
+    osmDark: {
+        name: 'OpenStreetMap Dark',
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: '© OpenStreetMap contributors',
         darkFilter: true // Aplica filtro dark
     },
     satellite: {
@@ -529,7 +535,7 @@ const MAP_PROVIDERS = {
         name: 'Terreno',
         url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
         attribution: '© OpenTopoMap (CC-BY-SA)',
-        darkFilter: true
+        darkFilter: false
     },
     dark: {
         name: 'Dark Mode',
@@ -541,14 +547,14 @@ const MAP_PROVIDERS = {
         name: 'CartoDB Dark',
         url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
         attribution: '© OpenStreetMap © CartoDB',
-        darkFilter: false
+        darkFilter: true
     },
     cyclemap: {
         name: 'Ciclovias',
-        url: 'https://tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=API_KEY',
+        url: 'https://tile.thunderforest.com/cycle/{z}/{x}/{y}.png?apikey=f076b9bc1802408b9d665dc2f5685fac',
         attribution: '© Thunderforest © OpenStreetMap contributors',
-        darkFilter: true,
-        requiresApiKey: true
+        darkFilter: false,
+        requiresApiKey: false
     }
 };
 
@@ -652,19 +658,20 @@ function addLayerSelector() {
                     border: 1px solid var(--border-color);
                     border-radius: 4px;
                     background: var(--container-bg);
-                    color: var(--primary-text);
-                    font-size: 12px;
+                    color: var(--font-select-color);
+                    font-size: 14px;
                 ">
+                    <option value="cyclemap">Bike Map</option>
                     <option value="osm">OpenStreetMap</option>
+                    <option value="osmDark">OpenStreetMap Dark</option>
                     <option value="dark">Dark Mode</option>
                     <option value="satellite">Satélite</option>
                     <option value="terrain">Terreno</option>
                     <option value="cartodb_dark">CartoDB Dark</option>
-                    <option value="cyclemap">Bike Map</option>
                 </select>
                 <div style="
-                    font-size: 10px; 
-                    color: var(--secondary-text); 
+                    font-size: 14px; 
+                    color: var(--success-text);
                     margin-top: 4px;
                     text-align: center;
                 ">
