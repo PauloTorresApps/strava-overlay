@@ -176,20 +176,57 @@ func (g *Generator) drawMainSpeedometer(dc *gg.Context, cx, cy float64, speed, m
 	dc.Stroke()
 	dc.Pop()
 
-	// 3. Arco de progresso da velocidade
-	dc.SetLineWidth(progressWidth)
+	// 3. Arco de progresso da velocidade com gradiente segmentado
 	progress := speed / maxSpeed
 	if progress > 1 {
 		progress = 1
 	}
-	progressAngle := startAngle + (totalArc * progress)
-	gradient := gg.NewLinearGradient(cx-radius, cy, cx+radius, cy)
-	gradient.AddColorStop(0, color.RGBA{R: 20, G: 180, B: 20, A: 204})
-	gradient.AddColorStop(0.7, color.RGBA{R: 255, G: 200, B: 0, A: 204})
-	gradient.AddColorStop(1, color.RGBA{R: 220, G: 30, B: 30, A: 204})
-	dc.SetStrokeStyle(gradient)
-	dc.DrawArc(cx, cy, radius, startAngle, progressAngle)
-	dc.Stroke()
+
+	// Desenha o arco em segmentos para simular gradiente
+	segments := 50 // Número de segmentos para suavidade
+	progressSegments := int(float64(segments) * progress)
+
+	if progressSegments > 0 {
+		segmentArc := totalArc * progress / float64(progressSegments)
+
+		for i := 0; i < progressSegments; i++ {
+			segmentProgress := float64(i) / float64(progressSegments-1)
+			if progressSegments == 1 {
+				segmentProgress = 0
+			}
+
+			// Interpola a cor baseada na posição do segmento
+			var r, g, b uint8
+			if segmentProgress < 0.5 {
+				// Verde para Amarelo/Laranja
+				ratio := segmentProgress * 2
+				r = uint8(20 + (255-20)*ratio)
+				g = uint8(180 + (200-180)*ratio)
+				b = uint8(0)
+			} else if segmentProgress < 0.8 {
+				// Amarelo/Laranja para Laranja escuro
+				ratio := (segmentProgress - 0.5) * 3.33
+				r = 255
+				g = uint8(200 - 100*ratio)
+				b = 0
+			} else {
+				// Laranja escuro para Vermelho
+				ratio := (segmentProgress - 0.8) * 5
+				r = uint8(255 - 35*ratio)
+				g = uint8(100 - 70*ratio)
+				b = uint8(30 * ratio)
+			}
+
+			dc.SetRGBA(float64(r)/255, float64(g)/255, float64(b)/255, 0.8)
+			dc.SetLineWidth(progressWidth)
+
+			segmentStart := startAngle + (totalArc * progress * float64(i) / float64(progressSegments))
+			segmentEnd := segmentStart + segmentArc
+
+			dc.DrawArc(cx, cy, radius, segmentStart, segmentEnd)
+			dc.Stroke()
+		}
+	}
 
 	// 4. Marcadores e números do velocímetro
 	dc.SetLineWidth(2)
