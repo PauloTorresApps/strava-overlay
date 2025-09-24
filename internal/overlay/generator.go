@@ -145,14 +145,34 @@ func (g *Generator) generateEnhancedOverlay(point gps.GPSPoint, maxSpeed float64
 	return dc.SavePNG(outputPath)
 }
 
+// getSpeedColor retorna a cor baseada na velocidade
+func (g *Generator) getSpeedColor(speed float64) color.RGBA {
+	if speed < 15 {
+		// Verde
+		return color.RGBA{R: 20, G: 180, B: 20, A: 255}
+	} else if speed < 25 {
+		// Transição verde para amarelo
+		ratio := (speed - 15) / 10
+		r := uint8(20 + (255-20)*ratio)
+		g := uint8(180 + (200-180)*ratio)
+		return color.RGBA{R: r, G: g, B: 0, A: 255}
+	} else if speed < 35 {
+		// Transição amarelo para laranja
+		ratio := (speed - 25) / 10
+		g := uint8(200 - 100*ratio)
+		return color.RGBA{R: 255, G: g, B: 0, A: 255}
+	} else {
+		// Vermelho
+		return color.RGBA{R: 220, G: 30, B: 30, A: 255}
+	}
+}
+
 // drawMainSpeedometer desenha o velocímetro principal no centro
 func (g *Generator) drawMainSpeedometer(dc *gg.Context, cx, cy float64, speed, maxSpeed float64, point gps.GPSPoint) {
-	// Configurações do velocímetro principal (ligeiramente ajustadas)
-	radius := 80.0        // Reduzido de 90.0 para 80.0
-	lineWidth := 16.0     // Reduzido de 18.0 para 16.0
-	progressWidth := 14.0 // Reduzido de 16.0 para 14.0
-	fontSize := 11.0      // Reduzido de 12.0 para 11.0
-	textOffset := 20.0    // Reduzido de 22.0 para 20.0
+	// Configurações do velocímetro principal
+	radius := 80.0
+	fontSize := 11.0
+	textOffset := 20.0
 
 	startAngle := gg.Radians(135)
 	totalArc := gg.Radians(270)
@@ -170,90 +190,67 @@ func (g *Generator) drawMainSpeedometer(dc *gg.Context, cx, cy float64, speed, m
 	// 2. Círculo de fundo com máscara
 	dc.Push()
 	dc.SetMask(maskContext.AsMask())
-	dc.SetLineWidth(lineWidth)
+	dc.SetLineWidth(16.0)
 	dc.SetRGBA(0.1, 0.1, 0.1, 0.5)
 	dc.DrawCircle(cx, cy, radius)
 	dc.Stroke()
 	dc.Pop()
 
-	// 3. Arco de progresso da velocidade com gradiente segmentado
-	progress := speed / maxSpeed
-	if progress > 1 {
-		progress = 1
-	}
+	// 3. Desenha os traços de velocidade
+	for kmh := 0.0; kmh <= maxSpeed; kmh++ {
+		angle := startAngle + (totalArc * (kmh / maxSpeed))
 
-	// Desenha o arco em segmentos para simular gradiente
-	segments := 50 // Número de segmentos para suavidade
-	progressSegments := int(float64(segments) * progress)
+		// Define tamanho e largura do traço
+		var tickLength, tickWidth float64
+		isMajor := int(kmh)%10 == 0
 
-	if progressSegments > 0 {
-		segmentArc := totalArc * progress / float64(progressSegments)
-
-		for i := 0; i < progressSegments; i++ {
-			segmentProgress := float64(i) / float64(progressSegments-1)
-			if progressSegments == 1 {
-				segmentProgress = 0
-			}
-
-			// Interpola a cor baseada na posição do segmento
-			var r, g, b uint8
-			if segmentProgress < 0.5 {
-				// Verde para Amarelo/Laranja
-				ratio := segmentProgress * 2
-				r = uint8(20 + (255-20)*ratio)
-				g = uint8(180 + (200-180)*ratio)
-				b = uint8(0)
-			} else if segmentProgress < 0.8 {
-				// Amarelo/Laranja para Laranja escuro
-				ratio := (segmentProgress - 0.5) * 3.33
-				r = 255
-				g = uint8(200 - 100*ratio)
-				b = 0
-			} else {
-				// Laranja escuro para Vermelho
-				ratio := (segmentProgress - 0.8) * 5
-				r = uint8(255 - 35*ratio)
-				g = uint8(100 - 70*ratio)
-				b = uint8(30 * ratio)
-			}
-
-			dc.SetRGBA(float64(r)/255, float64(g)/255, float64(b)/255, 0.8)
-			dc.SetLineWidth(progressWidth)
-
-			segmentStart := startAngle + (totalArc * progress * float64(i) / float64(progressSegments))
-			segmentEnd := segmentStart + segmentArc
-
-			dc.DrawArc(cx, cy, radius, segmentStart, segmentEnd)
-			dc.Stroke()
+		if isMajor {
+			tickLength = 12.0
+			tickWidth = 2.5
+		} else {
+			tickLength = 8.0
+			tickWidth = 1.0
 		}
+
+		// Calcula posições do traço
+		innerRadius := radius - tickLength
+		x1 := cx + innerRadius*math.Cos(angle)
+		y1 := cy + innerRadius*math.Sin(angle)
+		x2 := cx + radius*math.Cos(angle)
+		y2 := cy + radius*math.Sin(angle)
+
+		// Define cor do traço
+		dc.SetLineWidth(tickWidth)
+		if kmh <= speed {
+			// Traço ativo - colorido
+			speedColor := g.getSpeedColor(kmh)
+			dc.SetRGBA(float64(speedColor.R)/255, float64(speedColor.G)/255, float64(speedColor.B)/255, 0.9)
+		} else {
+			// Traço inativo - cinza
+			dc.SetRGBA(0.5, 0.5, 0.5, 0.3)
+		}
+
+		dc.DrawLine(x1, y1, x2, y2)
+		dc.Stroke()
 	}
 
-	// 4. Marcadores e números do velocímetro
+	// 4. Marcadores numéricos do velocímetro
 	dc.SetLineWidth(2)
 	dc.SetRGBA(1, 1, 1, 0.9)
 	for i := 0.0; i <= maxSpeed; i += 10 {
 		angle := startAngle + (totalArc * (i / maxSpeed))
-		if i/maxSpeed <= 1.0 {
-			x1 := cx + (radius-8)*math.Cos(angle)
-			y1 := cy + (radius-8)*math.Sin(angle)
-			x2 := cx + (radius-4)*math.Cos(angle)
-			y2 := cy + (radius-4)*math.Sin(angle)
-			dc.DrawLine(x1, y1, x2, y2)
-			dc.Stroke()
-
-			if g.fontLoaded {
-				textX := cx + (radius-textOffset)*math.Cos(angle)
-				textY := cy + (radius-textOffset)*math.Sin(angle)
-				dc.DrawStringAnchored(fmt.Sprintf("%.0f", i), textX, textY, 0.5, 0.5)
-			}
+		if i/maxSpeed <= 1.0 && g.fontLoaded {
+			textX := cx + (radius-textOffset)*math.Cos(angle)
+			textY := cy + (radius-textOffset)*math.Sin(angle)
+			dc.DrawStringAnchored(fmt.Sprintf("%.0f", i), textX, textY, 0.5, 0.5)
 		}
 	}
 
-	// 5. Bússola interna (ligeiramente reduzida)
+	// 5. Bússola interna
 	g.drawCompactCompass(dc, cx, cy, point.Bearing)
 
 	// 6. Velocidade digital
-	g.drawDigitalSpeed(dc, cx, cy+48, speed) // Ajustado de cy+55 para cy+48
+	g.drawDigitalSpeed(dc, cx, cy+48, speed)
 }
 
 // drawCompactCompass desenha uma bússola compacta no centro
