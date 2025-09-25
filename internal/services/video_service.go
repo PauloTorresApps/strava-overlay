@@ -27,9 +27,10 @@ func (s *VideoService) ProcessVideoWithOverlay(
 	activityID int64,
 	videoPath string,
 	manualStartTimeStr string,
+	overlayPosition string,
 	gpsService *GPSService,
 ) (string, error) {
-	log.Printf("🎬 Iniciando processamento de vídeo...")
+	log.Printf("🎬 Iniciando processamento de vídeo com overlay na posição: %s", overlayPosition)
 
 	// 1. Obter metadados do vídeo
 	videoMeta, err := video.GetVideoMetadata(videoPath)
@@ -65,14 +66,14 @@ func (s *VideoService) ProcessVideoWithOverlay(
 	log.Printf("📍 %d pontos GPS obtidos para o vídeo", len(gpsPoints))
 
 	// 5. Gerar sequência de overlays
-	overlayGen := overlay.NewGenerator()
+	overlayGen := overlay.NewGeneratorWithPosition(overlayPosition) // Novo construtor
 	defer overlayGen.Cleanup()
 
 	overlayImages, err := overlayGen.GenerateOverlaySequence(gpsPoints, videoMeta.FrameRate)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate overlays: %w", err)
 	}
-	log.Printf("🎨 %d imagens de overlay geradas", len(overlayImages))
+	log.Printf("🎨 %d imagens de overlay geradas na posição %s", len(overlayImages), overlayPosition)
 
 	// 6. Definir caminho de saída
 	outputPath, err := s.generateOutputPath(activityID)
@@ -82,7 +83,7 @@ func (s *VideoService) ProcessVideoWithOverlay(
 
 	// 7. Aplicar overlays ao vídeo
 	videoProcessor := video.NewProcessor()
-	err = videoProcessor.ApplyOverlays(videoPath, overlayImages, outputPath)
+	err = videoProcessor.ApplyOverlaysWithPosition(videoPath, overlayImages, outputPath, overlayPosition)
 	if err != nil {
 		return "", fmt.Errorf("failed to apply overlays: %w", err)
 	}

@@ -17,6 +17,11 @@ async function selectVideo() {
         }
         if (processBtn) processBtn.disabled = false;
 
+        // NOVO: Mostra o controle de posição do overlay
+        if (window.overlayPosition) {
+            window.overlayPosition.show();
+        }
+
         console.log("Buscando ponto GPS para sincronização automática...");
         const point = await window.go.main.App.GetGPSPointForVideoTime(selectedActivity.id, path);
 
@@ -30,7 +35,6 @@ async function selectVideo() {
         showMessage(result, `Erro ao selecionar vídeo: ${error}`, 'error');
     }
 }
-
 /**
  * Envia a atividade e o vídeo para o backend para processamento do overlay.
  */
@@ -50,11 +54,25 @@ async function processVideo() {
         showMessage(result, '', ''); // Limpa mensagens anteriores
         simulateProgress();
 
-        // Passa o tempo manual (pode ser uma string vazia) para o backend
-        const outputPath = await window.go.main.App.ProcessVideoOverlay(selectedActivity.id, selectedVideoPath, manualSyncTime);
+        // NOVO: Pega a posição selecionada do overlay
+        const overlayPosition = window.overlayPosition ? window.overlayPosition.getPosition() : 'bottom-left';
+        console.log(`📍 Processando vídeo com overlay na posição: ${overlayPosition}`);
+
+        // MODIFICADO: Passa a posição do overlay como 4º parâmetro
+        const outputPath = await window.go.main.App.ProcessVideoOverlay(
+            selectedActivity.id, 
+            selectedVideoPath, 
+            manualSyncTime,
+            overlayPosition // NOVO parâmetro
+        );
         
         updateProgress(100);
         showMessage(result, `Vídeo processado com sucesso!<br><strong>Local:</strong> ${outputPath}`, 'success');
+        
+        // NOVO: Esconde o controle após processamento bem-sucedido
+        if (window.overlayPosition) {
+            window.overlayPosition.hide();
+        }
     } catch (error) {
         updateProgress(0);
         showMessage(result, `Erro no processamento: ${error}`, 'error');

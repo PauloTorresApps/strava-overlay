@@ -31,13 +31,25 @@ func NewVideoHandler(
 }
 
 // ProcessVideoOverlay aplica o overlay ao vídeo
-func (h *VideoHandler) ProcessVideoOverlay(activityID int64, videoPath string, manualStartTimeStr string) (string, error) {
+func (h *VideoHandler) ProcessVideoOverlay(activityID int64, videoPath string, manualStartTimeStr string, overlayPosition string) (string, error) {
 	client := h.getStravaClient()
 	if client == nil {
 		return "", fmt.Errorf("not authenticated")
 	}
 
-	log.Printf("🎬 Iniciando processamento de vídeo para atividade %d", activityID)
+	log.Printf("🎬 Iniciando processamento de vídeo para atividade %d com overlay na posição %s", activityID, overlayPosition)
+
+	// Valida a posição
+	validPositions := map[string]bool{
+		"top-left":     true,
+		"top-right":    true,
+		"bottom-left":  true,
+		"bottom-right": true,
+	}
+
+	if !validPositions[overlayPosition] {
+		overlayPosition = "bottom-left" // Fallback para padrão
+	}
 
 	// Processa o vídeo usando o serviço especializado
 	outputPath, err := h.videoService.ProcessVideoWithOverlay(
@@ -45,6 +57,7 @@ func (h *VideoHandler) ProcessVideoOverlay(activityID int64, videoPath string, m
 		activityID,
 		videoPath,
 		manualStartTimeStr,
+		overlayPosition, // Novo parâmetro
 		h.gpsService,
 	)
 

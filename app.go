@@ -147,6 +147,6 @@ func (a *App) GetGPSPointsWithDensity(activityID int64, density string) ([]handl
 }
 
 // Video methods
-func (a *App) ProcessVideoOverlay(activityID int64, videoPath string, manualStartTimeStr string) (string, error) {
-	return a.videoHandler.ProcessVideoOverlay(activityID, videoPath, manualStartTimeStr)
+func (a *App) ProcessVideoOverlay(activityID int64, videoPath string, manualStartTimeStr string, overlayPosition string) (string, error) {
+	return a.videoHandler.ProcessVideoOverlay(activityID, videoPath, manualStartTimeStr, overlayPosition)
 }

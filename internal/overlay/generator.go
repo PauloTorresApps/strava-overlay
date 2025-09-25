@@ -17,10 +17,17 @@ import (
 
 // Generator cria imagens de overlay.
 type Generator struct {
-	width, height int
-	tempDir       string
-	fontLoaded    bool
-	fontPath      string
+	width, height   int
+	tempDir         string
+	fontLoaded      bool
+	fontPath        string
+	overlayPosition string
+}
+
+func NewGeneratorWithPosition(position string) *Generator {
+	g := NewGenerator()
+	g.overlayPosition = position
+	return g
 }
 
 func NewGenerator() *Generator {

@@ -288,6 +288,87 @@
             border: 1px solid var(--border-color);
         }
 
+        #overlayPositionControl {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 15px;
+            display: inline-block;
+        }
+
+        #overlayPositionControl h4 {
+            margin: 0 0 10px 0;
+            color: var(--primary-text);
+            font-size: 0.9rem;
+        }
+
+        .position-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 8px;
+            width: 120px;
+            height: 120px;
+        }
+
+        .position-btn {
+            background: var(--container-bg);
+            border: 2px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            color: var(--secondary-text);
+            padding: 0;
+        }
+
+        .position-btn:hover {
+            background: #262c36;
+            border-color: var(--accent-color);
+            transform: scale(1.05);
+        }
+
+        .position-btn.selected {
+            background: var(--button-bg);
+            border-color: var(--button-hover-bg);
+            color: white;
+            box-shadow: 0 0 0 3px rgba(35, 134, 54, 0.3);
+        }
+
+        .position-btn svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        /* Layout responsivo para video section */
+        #videoSection .video-controls-container {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            margin-bottom: 15px;
+        }
+
+        #videoSection .video-info-section {
+            flex: 1;
+        }
+
+        @media (max-width: 768px) {
+            #videoSection .video-controls-container {
+                flex-direction: column;
+            }
+            
+            #overlayPositionControl {
+                width: 100%;
+            }
+            
+            .position-grid {
+                margin: 0 auto;
+            }
+        }
+
        @media (max-width: 768px) {
             .activity-grid {
                 grid-template-columns: 1fr; /* Uma coluna em mobile */
@@ -371,15 +452,49 @@
         </section>
 
         <!-- Seção de Processamento de Vídeo -->
-        <section id="videoSection" class="hidden">
+       <section id="videoSection" class="hidden">
             <h2>Processar Vídeo com Overlay</h2>
-            <button id="selectVideoBtn">Selecionar Vídeo</button>
-            <div id="videoInfo"></div>
+            
+            <div class="video-controls-container">
+                <div class="video-info-section">
+                    <button id="selectVideoBtn">Selecionar Vídeo</button>
+                    <div id="videoInfo"></div>
+                </div>
+                
+                <!-- Controle de posição do overlay -->
+                <div id="overlayPositionControl" class="hidden">
+                    <h4>Posição do Overlay</h4>
+                    <div class="position-grid">
+                        <button class="position-btn" data-position="top-left" title="Canto Superior Esquerdo">
+                            <svg width="24" height="24" viewBox="0 0 24 24">
+                                <path d="M7,7 L17,7 L17,9 L9,9 L9,17 L7,17 Z" fill="currentColor"/>
+                            </svg>
+                        </button>
+                        <button class="position-btn" data-position="top-right" title="Canto Superior Direito">
+                            <svg width="24" height="24" viewBox="0 0 24 24">
+                                <path d="M17,7 L17,17 L15,17 L15,9 L7,9 L7,7 Z" fill="currentColor"/>
+                            </svg>
+                        </button>
+                        <button class="position-btn selected" data-position="bottom-left" title="Canto Inferior Esquerdo">
+                            <svg width="24" height="24" viewBox="0 0 24 24">
+                                <path d="M7,17 L7,7 L9,7 L9,15 L17,15 L17,17 Z" fill="currentColor"/>
+                            </svg>
+                        </button>
+                        <button class="position-btn" data-position="bottom-right" title="Canto Inferior Direito">
+                            <svg width="24" height="24" viewBox="0 0 24 24">
+                                <path d="M17,17 L7,17 L7,15 L15,15 L15,7 L17,7 Z" fill="currentColor"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
             <button id="processBtn" disabled>Processar com Overlay</button>
+            
             <div id="progress" class="hidden" style="margin-top: 15px;">
                 <div id="progressBarContainer" style="background-color: var(--border-color); border-radius: 5px;">
                     <div id="progressBar" style="width: 0%; height: 20px; background-color: var(--button-bg); border-radius: 5px; text-align: center; color: white; line-height: 20px; transition: width 0.3s ease-in-out;">
-                       <span id="progressText">0%</span>
+                    <span id="progressText">0%</span>
                     </div>
                 </div>
             </div>

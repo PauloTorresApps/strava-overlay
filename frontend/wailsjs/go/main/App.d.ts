@@ -29,6 +29,6 @@ export function GetMapProviderConfig():Promise<Record<string, any>>;
 
 export function GetSecureAPIKeys():Promise<Record<string, string>>;
 
-export function ProcessVideoOverlay(arg1:number,arg2:string,arg3:string):Promise<string>;
+export function ProcessVideoOverlay(arg1:number,arg2:string,arg3:string,arg4:string):Promise<string>;
 
 export function SelectVideoFile():Promise<string>;

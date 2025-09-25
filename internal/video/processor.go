@@ -14,7 +14,7 @@ func NewProcessor() *Processor {
 	return &Processor{}
 }
 
-func (p *Processor) ApplyOverlays(inputVideo string, overlayImages []string, outputPath string) error {
+func (p *Processor) ApplyOverlaysWithPosition(inputVideo string, overlayImages []string, outputPath string, position string) error {
 	if len(overlayImages) == 0 {
 		return fmt.Errorf("nenhuma imagem de overlay fornecida")
 	}
@@ -36,22 +36,26 @@ func (p *Processor) ApplyOverlays(inputVideo string, overlayImages []string, out
 		return fmt.Errorf("erro ao criar a lista de imagens para o FFmpeg: %w", err)
 	}
 
+	overlayX, overlayY := p.calculateOverlayCoordinates(position)
+
+	filterComplex := fmt.Sprintf(
+		"[1:v]format=rgba,setpts=PTS-STARTPTS[ovr];[0:v][ovr]overlay=%s:%s",
+		overlayX, overlayY,
+	)
+
 	// Comando FFmpeg para aplicar a sequência de imagens como um overlay
 	cmd := exec.Command("ffmpeg",
-		"-i", inputVideo, // Entrada 0: vídeo principal
-		"-f", "concat", // Entrada 1: sequência de imagens
+		"-i", inputVideo,
+		"-f", "concat",
 		"-safe", "0",
 		"-i", listFile,
-		"-filter_complex",
-		// --- MODIFICAÇÃO: Margens do overlay reduzidas para 10 pixels ---
-		"[1:v]format=rgba,setpts=PTS-STARTPTS[ovr];[0:v][ovr]overlay=5:main_h-overlay_h-5",
-		// -----------------------------------------------------------------
-		"-map_metadata", "0", // Copia os metadados do stream 0 (vídeo original)
-		"-c:a", "copy", // Copia o stream de áudio sem re-codificar
-		"-c:v", "libx264", // Codec de vídeo
-		"-preset", "fast", // Preset de velocidade de codificação
-		"-crf", "18", // Fator de Qualidade Constante (menor é melhor)
-		"-y", // Sobrescreve o arquivo de saída se ele existir
+		"-filter_complex", filterComplex,
+		"-map_metadata", "0",
+		"-c:a", "copy",
+		"-c:v", "libx264",
+		"-preset", "fast",
+		"-crf", "18",
+		"-y",
 		outputPath,
 	)
 
@@ -67,6 +71,24 @@ func (p *Processor) ApplyOverlays(inputVideo string, overlayImages []string, out
 	// É uma boa prática remover o arquivo de lista temporário
 	os.Remove(listFile)
 	return nil
+}
+
+func (p *Processor) calculateOverlayCoordinates(position string) (string, string) {
+	margin := "10" // margem em pixels
+
+	switch position {
+	case "top-left":
+		return margin, margin
+	case "top-right":
+		return fmt.Sprintf("main_w-overlay_w-%s", margin), margin
+	case "bottom-left":
+		return margin, fmt.Sprintf("main_h-overlay_h-%s", margin)
+	case "bottom-right":
+		return fmt.Sprintf("main_w-overlay_w-%s", margin), fmt.Sprintf("main_h-overlay_h-%s", margin)
+	default:
+		// Padrão: bottom-left
+		return margin, fmt.Sprintf("main_h-overlay_h-%s", margin)
+	}
 }
 
 // createImageListWithDuration cria um arquivo de texto para o demuxer concat do ffmpeg.
