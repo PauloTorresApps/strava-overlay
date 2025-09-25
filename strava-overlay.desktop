@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Strava Add Overlay
+Exec=/usr/bin/strava-overlay
+Icon=/usr/share/icons/hicolor/scalable/apps/strava-overlay.png
+Terminal=false
+Type=Application
+Categories=Graphics;Video;
+Comment=Adiciona sobreposições de dados do Strava em vídeos

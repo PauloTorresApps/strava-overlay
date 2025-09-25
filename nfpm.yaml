@@ -1,0 +1,31 @@
+# nfpm.yaml
+name: "strava-overlay"
+arch: "amd64"
+platform: "linux"
+version: "1.0.0" # Altere para a versão do seu app
+section: "graphics"
+priority: "optional"
+maintainer: "Paulo Roberto Torres <paulo.torres.apps@gmail.com>"
+description: |
+  Adiciona sobreposições de dados do Strava em vídeos de atividades.
+vendor: "Torres Apps"
+homepage: "https://github.com/PauloTorresApps/strava-overlay"
+license: "MIT" # Verifique e use a sua licença
+contents:
+  # O binário do aplicativo compilado pelo Wails
+  - src: ./build/bin/Strava Add Overlay
+    dst: /usr/bin/Strava Add Overlay
+    
+  # O arquivo .desktop para integração com o menu
+  - src: ./strava-overlay.desktop
+    dst: /usr/share/applications/strava-overlay.desktop
+    
+  # O ícone do aplicativo
+  - src: ./build/appicon.png
+    dst: /usr/share/icons/hicolor/scalable/apps/strava-overlay.png
+# Seção que define as configurações específicas para cada tipo de pacote
+overrides:
+  deb: # Aqui definimos que queremos um pacote .deb
+    scripts:
+      # Scripts podem ser adicionados aqui (ex: postinstall, prerm) se necessário
+      postinstall: ./scripts/postinstall.sh
