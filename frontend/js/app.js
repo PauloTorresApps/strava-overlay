@@ -55,6 +55,7 @@ function initializeDOMElements() {
     filterGPSCheckbox = document.getElementById('filterGPS');
     totalActivitiesSpan = document.getElementById('totalActivities');
     gpsActivitiesSpan = document.getElementById('gpsActivities');
+    refreshActivitiesBtn = document.getElementById('refreshActivitiesBtn');
     
     // Debug: verificar elementos críticos
     const criticalElements = {
@@ -87,6 +88,7 @@ function addEventListeners() {
     // Event listeners para atividades
     if (loadMoreBtn) loadMoreBtn.addEventListener('click', loadMoreActivities);
     if (filterGPSCheckbox) filterGPSCheckbox.addEventListener('change', handleFilterChange);
+    if (refreshActivitiesBtn) refreshActivitiesBtn.addEventListener('click', refreshActivities);
     
     // Event listener para redimensionamento da janela (importante para o mapa)
     window.addEventListener('resize', debounce(() => {

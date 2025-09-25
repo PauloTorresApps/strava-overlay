@@ -28,3 +28,4 @@ let selectVideoBtn, videoInfo, processBtn, progress;
 let progressBar, progressText, result;
 let loadMoreBtn, filterGPSCheckbox;
 let totalActivitiesSpan, gpsActivitiesSpan;
+let refreshActivitiesBtn;

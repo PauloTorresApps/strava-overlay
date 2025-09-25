@@ -58,3 +58,99 @@ function translateActivityType(type) {
     };
     return translations[type] || type;
 }
+
+/**
+ * Retorna o ícone apropriado para cada tipo de atividade
+ * @param {string} type - O tipo de atividade
+ * @returns {string} O emoji/ícone correspondente
+ */
+function getActivityIcon(type) {
+    const icons = {
+        // Ciclismo
+        'Ride': '🚴',
+        'VirtualRide': '🚴',
+        'EBikeRide': '⚡🚴',
+        'Handcycle': '🦽',
+        'Velomobile': '🚴',
+        
+        // Corrida
+        'Run': '🏃',
+        'VirtualRun': '🏃',
+        'TrailRun': '🏃‍♂️',
+        
+        // Caminhada
+        'Walk': '🚶',
+        'Hike': '🥾',
+        
+        // Natação
+        'Swim': '🏊',
+        'Swimming': '🏊',
+        
+        // Academia
+        'WeightTraining': '🏋️',
+        'Workout': '💪',
+        'CrossFit': '🏋️‍♂️',
+        
+        // Esportes de inverno
+        'Ski': '⛷️',
+        'AlpineSki': '⛷️',
+        'BackcountrySki': '⛷️',
+        'NordicSki': '⛷️',
+        'Snowboard': '🏂',
+        'Snowshoe': '❄️',
+        'IceSkate': '⛸️',
+        
+        // Esportes aquáticos
+        'Rowing': '🚣',
+        'Kayaking': '🛶',
+        'Canoeing': '🛶',
+        'StandUpPaddling': '🏄',
+        'Surfing': '🏄',
+        'Kitesurf': '🪁',
+        'Windsurf': '🏄',
+        'Sail': '⛵',
+        
+        // Escalada
+        'RockClimbing': '🧗',
+        'Climbing': '🧗',
+        
+        // Ioga e alongamento
+        'Yoga': '🧘',
+        'Pilates': '🤸',
+        
+        // Outros esportes
+        'Golf': '⛳',
+        'Soccer': '⚽',
+        'Basketball': '🏀',
+        'Tennis': '🎾',
+        'Badminton': '🏸',
+        'TableTennis': '🏓',
+        'Squash': '🎾',
+        'Volleyball': '🏐',
+        'Cricket': '🏏',
+        'Hockey': '🏒',
+        'Rugby': '🏈',
+        'Football': '🏈',
+        'MartialArts': '🥋',
+        'Boxing': '🥊',
+        
+        // Patinação
+        'InlineSkate': '🛼',
+        'RollerSki': '🛼',
+        'Skateboard': '🛹',
+        
+        // Atividades motorizadas
+        'EMountainBikeRide': '⚡🚵',
+        'Elliptical': '🏃‍♀️',
+        'StairStepper': '🪜',
+        
+        // Atividades de cadeira de rodas
+        'WheelchairRun': '🦽',
+        'WheelchairWalk': '🦽',
+        
+        // Default
+        'default': '🏃‍♂️'
+    };
+    
+    return icons[type] || icons['default'];
+}

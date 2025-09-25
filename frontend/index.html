@@ -347,9 +347,14 @@
         <!-- Seção de Atividades -->
         <section id="activitiesSection" class="hidden">
             <h2>Minhas Atividades</h2>
-            <div>
-                <input type="checkbox" id="filterGPS" checked>
-                <label for="filterGPS">Mostrar apenas atividades com GPS</label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div>
+                    <input type="checkbox" id="filterGPS" checked>
+                    <label for="filterGPS">Mostrar apenas atividades com GPS</label>
+                </div>
+                <button id="refreshActivitiesBtn" style="padding: 8px 16px;">
+                    🔄 Atualizar Lista
+                </button>
             </div>
             <div id="stats">
                 <span id="totalActivities"></span> | <span id="gpsActivities"></span>
