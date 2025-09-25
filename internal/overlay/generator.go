@@ -51,8 +51,8 @@ func NewGenerator() *Generator {
 	}
 
 	return &Generator{
-		width:      400, // Aumentado para acomodar widgets à esquerda
-		height:     320,
+		width:      340,
+		height:     340,
 		tempDir:    tempDir,
 		fontLoaded: false,
 		fontPath:   fontPath,
@@ -120,24 +120,43 @@ func (g *Generator) generateEnhancedOverlay(point gps.GPSPoint, maxSpeed float64
 	dc.SetRGBA(0, 0, 0, 0) // Fundo transparente
 	dc.Clear()
 
-	// Centro do velocímetro deslocado para a direita
-	centerX := float64(g.width) - 120.0 // Deslocado para direita
+	radius := 95.0
+
+	// Centro do velocímetro
+	centerX := float64(g.width) - radius - 15.0
 	centerY := float64(g.height) / 2
 
 	// 1. Desenha o velocímetro principal
-	g.drawMainSpeedometer(dc, centerX, centerY, point.Velocity*3.6, maxSpeed, point)
+	g.drawMainSpeedometer(dc, centerX, centerY, point.Velocity*3.6, maxSpeed, point, radius)
 
 	// 2. Desenha os widgets empilhados à esquerda
-	g.drawStackedWidgets(dc, point)
+	g.drawStackedWidgets(dc, point, centerX, centerY, radius)
 
 	return dc.SavePNG(outputPath)
 }
 
-// drawStackedWidgets desenha os widgets empilhados à esquerda
-func (g *Generator) drawStackedWidgets(dc *gg.Context, point gps.GPSPoint) {
-	startX := 20.0  // Margem esquerda
-	startY := 40.0  // Posição inicial vertical
-	spacing := 35.0 // Espaçamento entre widgets
+// drawStackedWidgets desenha os widgets empilhados à esquerda com fundo
+func (g *Generator) drawStackedWidgets(dc *gg.Context, point gps.GPSPoint, speedometerCenterX, speedometerCenterY, speedometerRadius float64) {
+	spacing := 35.0
+	widgetHeight := 25.0
+	padding := 10.0
+
+	// Container mais estreito e mais distante do velocímetro
+	totalHeight := (spacing * 3) + widgetHeight + (padding * 2)
+	containerWidth := 95.0 // Reduzido de 120px
+
+	// Posiciona com maior distância do velocímetro
+	containerX := 10.0
+	containerY := speedometerCenterY - (totalHeight / 2)
+
+	// Desenha fundo escuro com transparência
+	dc.SetRGBA(0.1, 0.1, 0.1, 0.5)
+	dc.DrawRoundedRectangle(containerX, containerY, containerWidth, totalHeight, 8)
+	dc.Fill()
+
+	// Posição inicial para os widgets
+	startX := containerX + padding
+	startY := containerY + padding
 
 	// G-Force
 	gForce := math.Abs(point.GForce)
@@ -215,10 +234,9 @@ func (g *Generator) getSpeedColor(speed float64) color.RGBA {
 }
 
 // drawMainSpeedometer desenha o velocímetro principal
-func (g *Generator) drawMainSpeedometer(dc *gg.Context, cx, cy float64, speed, maxSpeed float64, point gps.GPSPoint) {
-	radius := 80.0
+func (g *Generator) drawMainSpeedometer(dc *gg.Context, cx, cy float64, speed, maxSpeed float64, point gps.GPSPoint, radius float64) {
 	fontSize := 11.0
-	textOffset := 20.0
+	textOffset := 22.0
 
 	startAngle := gg.Radians(135)
 	totalArc := gg.Radians(270)
@@ -250,10 +268,10 @@ func (g *Generator) drawMainSpeedometer(dc *gg.Context, cx, cy float64, speed, m
 		isMajor := int(kmh)%10 == 0
 
 		if isMajor {
-			tickLength = 12.0
+			tickLength = 14.0
 			tickWidth = 2.5
 		} else {
-			tickLength = 8.0
+			tickLength = 9.0
 			tickWidth = 1.0
 		}
 
@@ -287,17 +305,17 @@ func (g *Generator) drawMainSpeedometer(dc *gg.Context, cx, cy float64, speed, m
 		}
 	}
 
-	// 5. Bússola interna
+	// 5. Bússola interna com raio aumentado
 	g.drawCompactCompass(dc, cx, cy, point.Bearing)
 
 	// 6. Velocidade digital
-	g.drawDigitalSpeed(dc, cx, cy+48, speed)
+	g.drawDigitalSpeed(dc, cx, cy+58, speed)
 }
 
 // drawCompactCompass desenha uma bússola compacta no centro
 func (g *Generator) drawCompactCompass(dc *gg.Context, cx, cy, bearing float64) {
-	radius := 30.0
-	fontSize := 9.0
+	radius := 42.0 // Aumentado em 10px (de 32 para 42)
+	fontSize := 10.0
 
 	g.loadFont(dc, fontSize)
 
@@ -318,8 +336,8 @@ func (g *Generator) drawCompactCompass(dc *gg.Context, cx, cy, bearing float64) 
 		cardinals := map[string]float64{"N": 270, "E": 0, "S": 90, "W": 180}
 		for text, angle := range cardinals {
 			rad := gg.Radians(angle)
-			textX := cx + (radius-7)*math.Cos(rad)
-			textY := cy + (radius-7)*math.Sin(rad)
+			textX := cx + (radius-10)*math.Cos(rad)
+			textY := cy + (radius-10)*math.Sin(rad)
 			dc.DrawStringAnchored(text, textX, textY, 0.5, 0.5)
 		}
 	}
@@ -329,49 +347,49 @@ func (g *Generator) drawCompactCompass(dc *gg.Context, cx, cy, bearing float64) 
 	dc.Translate(cx, cy)
 	dc.Rotate(gg.Radians(bearing))
 
-	needleLength := radius - 10
-	needleWidth := 7.0
+	needleLength := radius - 13
+	needleWidth := 8.0
 
 	// Ponta vermelha (Norte)
 	dc.SetRGBA(0.9, 0.15, 0.15, 1)
 	dc.MoveTo(0, -needleLength)
-	dc.LineTo(-needleWidth/2, -3)
-	dc.LineTo(needleWidth/2, -3)
+	dc.LineTo(-needleWidth/2, -4)
+	dc.LineTo(needleWidth/2, -4)
 	dc.ClosePath()
 	dc.Fill()
 
 	// Ponta branca (Sul)
 	dc.SetRGBA(0.95, 0.95, 0.95, 1)
 	dc.MoveTo(0, needleLength)
-	dc.LineTo(-needleWidth/2, 3)
-	dc.LineTo(needleWidth/2, 3)
+	dc.LineTo(-needleWidth/2, 4)
+	dc.LineTo(needleWidth/2, 4)
 	dc.ClosePath()
 	dc.Fill()
 
 	// Corpo central
 	dc.SetRGBA(0.4, 0.4, 0.4, 0.8)
-	dc.MoveTo(-needleWidth/2, -3)
-	dc.LineTo(-1.5, -3)
-	dc.LineTo(-1.5, 3)
-	dc.LineTo(-needleWidth/2, 3)
+	dc.MoveTo(-needleWidth/2, -4)
+	dc.LineTo(-1.5, -4)
+	dc.LineTo(-1.5, 4)
+	dc.LineTo(-needleWidth/2, 4)
 	dc.ClosePath()
 	dc.Fill()
 
 	dc.SetRGBA(0.7, 0.7, 0.7, 0.8)
-	dc.MoveTo(1.5, -3)
-	dc.LineTo(needleWidth/2, -3)
-	dc.LineTo(needleWidth/2, 3)
-	dc.LineTo(1.5, 3)
+	dc.MoveTo(1.5, -4)
+	dc.LineTo(needleWidth/2, -4)
+	dc.LineTo(needleWidth/2, 4)
+	dc.LineTo(1.5, 4)
 	dc.ClosePath()
 	dc.Fill()
 
 	// Ponto central
 	dc.SetRGBA(0.2, 0.2, 0.2, 0.9)
-	dc.DrawCircle(0, 0, 2.2)
+	dc.DrawCircle(0, 0, 2.8)
 	dc.Fill()
 
 	dc.SetRGBA(0.8, 0.8, 0.8, 0.7)
-	dc.DrawCircle(0, 0, 1.3)
+	dc.DrawCircle(0, 0, 1.6)
 	dc.Fill()
 
 	dc.Pop()
@@ -379,13 +397,13 @@ func (g *Generator) drawCompactCompass(dc *gg.Context, cx, cy, bearing float64) 
 
 // drawDigitalSpeed desenha a velocidade digital
 func (g *Generator) drawDigitalSpeed(dc *gg.Context, cx, cy, speed float64) {
-	g.loadFont(dc, 22)
+	g.loadFont(dc, 24)
 	dc.SetRGB255(0, 221, 255)
 	dc.DrawStringAnchored(fmt.Sprintf("%.1f", speed), cx, cy, 0.5, 0.5)
 
-	g.loadFont(dc, 11)
+	g.loadFont(dc, 12)
 	dc.SetRGB255(0, 221, 255)
-	dc.DrawStringAnchored("km/h", cx, cy+13, 0.5, 0.5)
+	dc.DrawStringAnchored("km/h", cx, cy+14, 0.5, 0.5)
 }
 
 // Cleanup remove o diretório temporário.
