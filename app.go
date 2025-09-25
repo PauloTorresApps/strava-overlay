@@ -3,14 +3,13 @@ package main
 import (
 	"context"
 	"log"
-	"os"
 
 	"strava-overlay/internal/auth"
+	"strava-overlay/internal/config"
 	"strava-overlay/internal/handlers"
 	"strava-overlay/internal/services"
 	"strava-overlay/internal/strava"
 
-	"github.com/joho/godotenv"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -34,14 +33,11 @@ type App struct {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	if err := godotenv.Load(); err != nil {
-		log.Printf("No .env file found: %v", err)
-	}
+	clientID := config.STRAVA_CLIENT_ID
+	clientSecret := config.STRAVA_CLIENT_SECRET
 
-	clientID := os.Getenv("STRAVA_CLIENT_ID")
-	clientSecret := os.Getenv("STRAVA_CLIENT_SECRET")
 	if clientID == "" || clientSecret == "" {
-		log.Fatal("STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET must be set")
+		log.Fatal("STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET must be set in internal/config/credentials.go")
 	}
 
 	stravaAuth := auth.NewStravaAuth(clientID, clientSecret)
