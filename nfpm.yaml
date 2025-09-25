@@ -7,10 +7,12 @@ section: "graphics"
 priority: "optional"
 maintainer: "Paulo Roberto Torres <paulo.torres.apps@gmail.com>"
 description: |
-  Adiciona sobreposições de dados do Strava em vídeos de atividades.
+  Adiciona informações da Atrividade coletada do Strava em vídeos de atividades, sincronizando automaticamente ou manualmente o ponto de início.
 vendor: "Torres Apps"
 homepage: "https://github.com/PauloTorresApps/strava-overlay"
 license: "MIT" # Verifique e use a sua licença
+depends:
+  - ffmpeg
 contents:
   # O binário do aplicativo compilado pelo Wails
   - src: ./build/bin/Strava Add Overlay
