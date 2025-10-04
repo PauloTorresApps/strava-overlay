@@ -27,6 +27,7 @@ type Generator struct {
 func NewGeneratorWithPosition(position string) *Generator {
 	g := NewGenerator()
 	g.overlayPosition = position
+	log.Printf("🎨 Generator criado com posição: %s", position)
 	return g
 }
 
@@ -34,7 +35,7 @@ func NewGenerator() *Generator {
 	tempDir, err := os.MkdirTemp("", "strava_overlays_*")
 	if err != nil {
 		log.Printf("Não foi possível criar o diretório temporário: %v", err)
-		tempDir = "." // Usa o diretório atual como fallback
+		tempDir = "."
 	}
 
 	var fontPath string
@@ -58,11 +59,12 @@ func NewGenerator() *Generator {
 	}
 
 	return &Generator{
-		width:      340,
-		height:     340,
-		tempDir:    tempDir,
-		fontLoaded: false,
-		fontPath:   fontPath,
+		width:           340,
+		height:          340,
+		tempDir:         tempDir,
+		fontLoaded:      false,
+		fontPath:        fontPath,
+		overlayPosition: "bottom-left", // Padrão
 	}
 }
 
@@ -98,14 +100,14 @@ func (g *Generator) GenerateOverlaySequence(points []gps.GPSPoint, frameRate flo
 
 	maxSpeed := 0.0
 	for _, point := range points {
-		speed := point.Velocity * 3.6 // m/s para km/h
+		speed := point.Velocity * 3.6
 		if speed > maxSpeed {
 			maxSpeed = speed
 		}
 	}
 	maxSpeedScale := math.Ceil(maxSpeed/10) * 10
 	if maxSpeedScale < 50 {
-		maxSpeedScale = 50 // Escala mínima
+		maxSpeedScale = 50
 	}
 
 	var imagePaths []string
@@ -118,20 +120,40 @@ func (g *Generator) GenerateOverlaySequence(points []gps.GPSPoint, frameRate flo
 		}
 		imagePaths = append(imagePaths, imagePath)
 	}
+
+	log.Printf("✅ %d overlays gerados na posição: %s", len(imagePaths), g.overlayPosition)
 	return imagePaths, nil
 }
 
 // generateEnhancedOverlay cria o overlay principal com velocímetro e widgets
 func (g *Generator) generateEnhancedOverlay(point gps.GPSPoint, maxSpeed float64, outputPath string) error {
 	dc := gg.NewContext(g.width, g.height)
-	dc.SetRGBA(0, 0, 0, 0) // Fundo transparente
+	dc.SetRGBA(0, 0, 0, 0)
 	dc.Clear()
 
 	radius := 95.0
+	margin := 15.0
 
-	// Centro do velocímetro
-	centerX := float64(g.width) - radius - 15.0
-	centerY := float64(g.height) / 2
+	// CORRIGIDO: Calcula a posição do centro do velocímetro baseado em g.overlayPosition
+	var centerX, centerY float64
+
+	switch g.overlayPosition {
+	case "top-left":
+		centerX = radius + margin
+		centerY = radius + margin
+	case "top-right":
+		centerX = float64(g.width) - radius - margin
+		centerY = radius + margin
+	case "bottom-left":
+		centerX = radius + margin
+		centerY = float64(g.height) - radius - margin
+	case "bottom-right":
+		fallthrough
+	default:
+		// Posição padrão (bottom-right com offset vertical centralizado)
+		centerX = float64(g.width) - radius - margin
+		centerY = float64(g.height) / 2
+	}
 
 	// 1. Desenha o velocímetro principal
 	g.drawMainSpeedometer(dc, centerX, centerY, point.Velocity*3.6, maxSpeed, point, radius)
@@ -148,20 +170,34 @@ func (g *Generator) drawStackedWidgets(dc *gg.Context, point gps.GPSPoint, speed
 	widgetHeight := 25.0
 	padding := 10.0
 
-	// Container mais estreito e mais distante do velocímetro
 	totalHeight := (spacing * 3) + widgetHeight + (padding * 2)
-	containerWidth := 95.0 // Reduzido de 120px
+	containerWidth := 95.0
 
-	// Posiciona com maior distância do velocímetro
-	containerX := 10.0
-	containerY := speedometerCenterY - (totalHeight / 2)
+	// CORRIGIDO: Ajusta posição dos widgets baseado na posição do overlay
+	var containerX, containerY float64
+
+	switch g.overlayPosition {
+	case "top-right", "bottom-right":
+		// Widgets à esquerda do velocímetro
+		containerX = 10.0
+	case "top-left", "bottom-left":
+		// Widgets à direita do velocímetro
+		containerX = speedometerCenterX + speedometerRadius + 20.0
+		// Garante que não ultrapassa a largura
+		if containerX+containerWidth > float64(g.width) {
+			containerX = 10.0 // Fallback para esquerda
+		}
+	default:
+		containerX = 10.0
+	}
+
+	containerY = speedometerCenterY - (totalHeight / 2)
 
 	// Desenha fundo escuro com transparência
 	dc.SetRGBA(0.1, 0.1, 0.1, 0.5)
 	dc.DrawRoundedRectangle(containerX, containerY, containerWidth, totalHeight, 8)
 	dc.Fill()
 
-	// Posição inicial para os widgets
 	startX := containerX + padding
 	startY := containerY + padding
 
@@ -190,12 +226,10 @@ func (g *Generator) drawStackedWidgets(dc *gg.Context, point gps.GPSPoint, speed
 
 // drawTextWidget desenha um widget de texto individual
 func (g *Generator) drawTextWidget(dc *gg.Context, x, y float64, label, value string, textColor color.RGBA) {
-	// Label menor
 	g.loadFont(dc, 9)
 	dc.SetRGBA(0.6, 0.6, 0.6, 0.9)
 	dc.DrawString(label, x, y)
 
-	// Valor maior e colorido
 	g.loadFont(dc, 16)
 	dc.SetRGBA(float64(textColor.R)/255, float64(textColor.G)/255, float64(textColor.B)/255, 1.0)
 	dc.DrawString(value, x, y+15)
@@ -312,7 +346,7 @@ func (g *Generator) drawMainSpeedometer(dc *gg.Context, cx, cy float64, speed, m
 		}
 	}
 
-	// 5. Bússola interna com raio aumentado
+	// 5. Bússola interna
 	g.drawCompactCompass(dc, cx, cy, point.Bearing)
 
 	// 6. Velocidade digital
@@ -321,7 +355,7 @@ func (g *Generator) drawMainSpeedometer(dc *gg.Context, cx, cy float64, speed, m
 
 // drawCompactCompass desenha uma bússola compacta no centro
 func (g *Generator) drawCompactCompass(dc *gg.Context, cx, cy, bearing float64) {
-	radius := 42.0 // Aumentado em 10px (de 32 para 42)
+	radius := 42.0
 	fontSize := 10.0
 
 	g.loadFont(dc, fontSize)

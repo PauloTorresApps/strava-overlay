@@ -19,6 +19,11 @@ async function initApp() {
     
     initializeDOMElements();
     addEventListeners();
+
+    if (window.overlayPosition) {
+        window.overlayPosition.init();
+        console.log('✅ Controle de posição inicializado');
+    }
     
     // Verifica a autenticação automaticamente na inicialização
     setTimeout(checkAuthenticationOnStartup, 500);
