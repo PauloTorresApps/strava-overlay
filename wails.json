@@ -1,7 +1,7 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "strava-overlay",
-  "outputfilename": "Strava Add Overlay",
+  "outputfilename": "strava-add-overlay",
   "frontend": {
     "dir": "./frontend",
     "build": "echo 'No build required'",

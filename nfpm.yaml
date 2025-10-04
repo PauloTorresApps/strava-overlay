@@ -15,8 +15,8 @@ depends:
   - ffmpeg
 contents:
   # O binário do aplicativo compilado pelo Wails
-  - src: ./build/bin/Strava Add Overlay
-    dst: /usr/bin/Strava Add Overlay
+  - src: ./build/bin/strava-add-overlay
+    dst: /usr/bin/strava-add-overlay
     
   # O arquivo .desktop para integração com o menu
   - src: ./strava-overlay.desktop
