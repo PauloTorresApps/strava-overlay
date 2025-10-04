@@ -1,20 +1,22 @@
 console.log('🛠️ utils.js carregando...');
 
 /**
- * Formata um objeto Date para o formato de data local (dd/mm/aaaa).
- * @param {Date} date - O objeto Date a ser formatado.
- * @returns {string} A data formatada.
+ * Formata um objeto Date para o formato de data local usando i18n
  */
 function formatDate(date) {
+    if (window.i18n && window.i18n.currentLocale) {
+        return window.i18n.formatDate(date);
+    }
     return date.toLocaleDateString('pt-BR');
 }
 
 /**
- * Formata um objeto Date para o formato de hora local (hh:mm).
- * @param {Date} date - O objeto Date a ser formatado.
- * @returns {string} A hora formatada.
+ * Formata um objeto Date para o formato de hora local usando i18n
  */
 function formatTime(date) {
+    if (window.i18n && window.i18n.currentLocale) {
+        return window.i18n.formatTime(date);
+    }
     return date.toLocaleTimeString('pt-BR', {
         hour: '2-digit',
         minute: '2-digit'
@@ -22,9 +24,7 @@ function formatTime(date) {
 }
 
 /**
- * Converte segundos em uma string de duração (ex: "1h 30m" ou "45m 10s").
- * @param {number} seconds - A duração total em segundos.
- * @returns {string} A duração formatada.
+ * Converte segundos em uma string de duração (ex: "1h 30m" ou "45m 10s")
  */
 function formatDuration(seconds) {
     const hours = Math.floor(seconds / 3600);
@@ -38,11 +38,14 @@ function formatDuration(seconds) {
 }
 
 /**
- * Traduz o tipo de atividade do inglês para o português.
- * @param {string} type - O tipo de atividade (ex: "Ride", "Run").
- * @returns {string} O tipo de atividade traduzido.
+ * Traduz o tipo de atividade usando i18n
  */
 function translateActivityType(type) {
+    if (window.i18n && window.i18n.currentLocale) {
+        return window.i18n.translateActivityType(type);
+    }
+    
+    // Fallback para português
     const translations = {
         'Ride': 'Ciclismo',
         'Run': 'Corrida',
@@ -54,15 +57,12 @@ function translateActivityType(type) {
         'VirtualRide': 'Ciclismo Virtual',
         'VirtualRun': 'Corrida Virtual',
         'EBikeRide': 'E-Bike',
-        // Adicione outras traduções conforme necessário
     };
     return translations[type] || type;
 }
 
 /**
  * Retorna o ícone apropriado para cada tipo de atividade
- * @param {string} type - O tipo de atividade
- * @returns {string} O emoji/ícone correspondente
  */
 function getActivityIcon(type) {
     const icons = {

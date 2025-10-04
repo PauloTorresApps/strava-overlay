@@ -1,0 +1,132 @@
+{
+  "app": {
+    "title": "Strava Video Overlay",
+    "loading": "Loading..."
+  },
+  "header": {
+    "status": {
+      "checking": "Checking connection...",
+      "connected": "Connected to Strava",
+      "error": "Not connected",
+      "authButton": "Authenticate with Strava"
+    }
+  },
+  "activities": {
+    "title": "My Activities",
+    "filterGPS": "Show only GPS activities",
+    "refresh": "Refresh List",
+    "stats": {
+      "total": "activities loaded",
+      "withGPS": "with GPS"
+    },
+    "loadMore": "Load More",
+    "allLoaded": "All activities loaded",
+    "loading": "Loading...",
+    "noGPS": "This activity has no GPS data",
+    "noActivities": "No activities found with the applied filters.",
+    "types": {
+      "Ride": "Cycling",
+      "Run": "Running",
+      "Hike": "Hiking",
+      "Walk": "Walking",
+      "Swimming": "Swimming",
+      "Workout": "Workout",
+      "WeightTraining": "Weight Training",
+      "VirtualRide": "Virtual Ride",
+      "VirtualRun": "Virtual Run",
+      "EBikeRide": "E-Bike"
+    }
+  },
+  "activityDetail": {
+    "title": "Activity Details",
+    "basicInfo": {
+      "title": "Basic Information",
+      "name": "Name",
+      "type": "Type",
+      "date": "Date",
+      "time": "Time"
+    },
+    "performance": {
+      "title": "Performance",
+      "distance": "Distance",
+      "duration": "Duration",
+      "maxSpeed": "Max Speed",
+      "calories": "Calories",
+      "elevation": "Elevation Gain"
+    }
+  },
+  "video": {
+    "title": "Process Video with Overlay",
+    "selectVideo": "Select Video",
+    "selectedVideo": "Selected Video",
+    "overlayPosition": {
+      "title": "Overlay Position",
+      "topLeft": "Top Left Corner",
+      "topRight": "Top Right Corner",
+      "bottomLeft": "Bottom Left Corner",
+      "bottomRight": "Bottom Right Corner"
+    },
+    "process": "Process with Overlay",
+    "processing": "Processing...",
+    "messages": {
+      "autoSync": "Auto start point found!",
+      "manualSync": "Click on map to set manually",
+      "success": "Video processed successfully!",
+      "location": "Location",
+      "syncSet": "Sync set",
+      "loadingTrajectory": "Loading detailed trajectory...",
+      "overlaySet": "Overlay will be positioned at",
+      "trajectoryLoaded": "Trajectory loaded"
+    }
+  },
+  "map": {
+    "provider": "Map Provider",
+    "current": "Current",
+    "available": "providers available",
+    "categories": {
+      "sports": "Sports",
+      "satellite": "Satellite",
+      "streets": "Streets & Navigation",
+      "dark": "Dark Mode",
+      "terrain": "Terrain"
+    },
+    "markers": {
+      "start": "Activity start",
+      "end": "Activity end",
+      "videoStart": "Manual Video Start",
+      "autoStart": "Auto Start (Click trajectory to adjust)"
+    },
+    "speedLegend": {
+      "title": "Speed",
+      "stopped": "Stopped (0-3 km/h)",
+      "verySlow": "Very slow (3-8 km/h)",
+      "slow": "Slow (8-15 km/h)",
+      "medium": "Moderate (15-25 km/h)",
+      "fast": "Fast (25-40 km/h)",
+      "veryFast": "Very fast (40+ km/h)"
+    },
+    "gpsPoints": "GPS points",
+    "messages": {
+      "basicTrajectory": "Basic trajectory loaded (limited GPS data)",
+      "searching": "Searching for nearest GPS point..."
+    }
+  },
+  "messages": {
+    "success": "Success",
+    "error": "Error",
+    "warning": "Warning",
+    "info": "Information"
+  },
+  "errors": {
+    "selectActivityFirst": "Select an activity and video first",
+    "noGPSData": "No GPS data available for this activity",
+    "processingFailed": "Processing failed",
+    "loadFailed": "Failed to load",
+    "authRequired": "Authentication required"
+  },
+  "config": {
+    "loading": "Loading settings...",
+    "loaded": "Settings loaded",
+    "default": "Default settings"
+  }
+}

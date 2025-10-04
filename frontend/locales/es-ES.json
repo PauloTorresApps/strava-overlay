@@ -1,0 +1,130 @@
+{
+  "app": {
+    "title": "Strava Video Overlay",
+    "loading": "Cargando..."
+  },
+  "header": {
+    "status": {
+      "checking": "Verificando conexión...",
+      "connected": "Conectado a Strava",
+      "error": "No conectado",
+      "authButton": "Autenticar con Strava"
+    }
+  },
+  "activities": {
+    "title": "Mis Actividades",
+    "filterGPS": "Mostrar solo actividades con GPS",
+    "refresh": "Actualizar Lista",
+    "stats": {
+      "total": "actividades cargadas",
+      "withGPS": "con GPS"
+    },
+    "loadMore": "Cargar Más",
+    "allLoaded": "Todas las actividades cargadas",
+    "loading": "Cargando...",
+    "noGPS": "Esta actividad no tiene datos GPS",
+    "noActivities": "No se encontraron actividades con los filtros aplicados.",
+    "types": {
+      "Ride": "Ciclismo",
+      "Run": "Carrera",
+      "Hike": "Senderismo",
+      "Walk": "Caminata",
+      "Swimming": "Natación",
+      "Workout": "Entrenamiento",
+      "WeightTraining": "Musculación",
+      "VirtualRide": "Ciclismo Virtual",
+      "VirtualRun": "Carrera Virtual",
+      "EBikeRide": "E-Bike"
+    }
+  },
+  "activityDetail": {
+    "title": "Detalles de la Actividad",
+    "basicInfo": {
+      "title": "Información Básica",
+      "name": "Nombre",
+      "type": "Tipo",
+      "date": "Fecha",
+      "time": "Hora"
+    },
+    "performance": {
+      "title": "Rendimiento",
+      "distance": "Distancia",
+      "duration": "Duración",
+      "maxSpeed": "Vel. Máxima",
+      "calories": "Calorías",
+      "elevation": "Ganancia de Elevación"
+    }
+  },
+  "video": {
+    "title": "Procesar Video con Overlay",
+    "selectVideo": "Seleccionar Video",
+    "selectedVideo": "Video Seleccionado",
+    "overlayPosition": {
+      "title": "Posición del Overlay",
+      "topLeft": "Esquina Superior Izquierda",
+      "topRight": "Esquina Superior Derecha",
+      "bottomLeft": "Esquina Inferior Izquierda",
+      "bottomRight": "Esquina Inferior Derecha"
+    },
+    "process": "Procesar con Overlay",
+    "processing": "Procesando...",
+    "messages": {
+      "autoSync": "¡Punto de inicio automático encontrado!",
+      "manualSync": "Haga clic en el mapa para configurar manualmente",
+      "success": "¡Video procesado con éxito!",
+      "location": "Ubicación",
+      "syncSet": "Sincronización configurada",
+      "loadingTrajectory": "Cargando trayectoria detallada...",
+      "overlaySet": "El overlay se posicionará en",
+      "trajectoryLoaded": "Trayectoria cargada"
+    }
+  },
+  "map": {
+    "provider": "Proveedor de Mapa",
+    "current": "Actual",
+    "available": "proveedores disponibles",
+    "gpsPoints": "puntos GPS",
+    "categories": {
+      "sports": "Deportes",
+      "satellite": "Satélite",
+      "streets": "Calles y Navegación",
+      "dark": "Modo Oscuro",
+      "terrain": "Terreno"
+    },
+    "markers": {
+      "start": "Inicio de actividad",
+      "end": "Fin de actividad",
+      "videoStart": "Inicio Manual del Video",
+      "autoStart": "Inicio Automático (Haga clic en la trayectoria para ajustar)"
+    },
+    "speedLegend": {
+      "title": "Velocidad",
+      "stopped": "Detenido (0-3 km/h)",
+      "verySlow": "Muy lento (3-8 km/h)",
+      "slow": "Lento (8-15 km/h)",
+      "medium": "Moderado (15-25 km/h)",
+      "fast": "Rápido (25-40 km/h)",
+      "veryFast": "Muy rápido (40+ km/h)"
+    }
+  },
+  "messages": {
+    "success": "Éxito",
+    "error": "Error",
+    "warning": "Advertencia",
+    "info": "Información",
+    "basicTrajectory": "Trayectoria básica cargada (datos GPS limitados)",
+    "searching": "Buscando punto GPS más cercano..."
+  },
+  "errors": {
+    "selectActivityFirst": "Seleccione una actividad y un video primero",
+    "noGPSData": "No hay datos GPS disponibles para esta actividad",
+    "processingFailed": "Procesamiento fallido",
+    "loadFailed": "Error al cargar",
+    "authRequired": "Autenticación requerida"
+  },
+  "config": {
+    "loading": "Cargando configuración...",
+    "loaded": "Configuración cargada",
+    "default": "Configuración predeterminada"
+  }
+}

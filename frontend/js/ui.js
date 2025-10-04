@@ -2,9 +2,6 @@ console.log('🎨 ui.js carregando...');
 
 /**
  * Exibe uma mensagem na tela em um container específico.
- * @param {HTMLElement} container - O elemento DOM onde a mensagem será exibida.
- * @param {string} message - O conteúdo da mensagem. Pode incluir HTML.
- * @param {'success'|'error'|'info'} type - O tipo de mensagem para estilização.
  */
 function showMessage(container, message, type) {
     try {
@@ -18,7 +15,6 @@ function showMessage(container, message, type) {
 
 /**
  * Atualiza a barra de progresso.
- * @param {number} value - O valor do progresso (0 a 100).
  */
 function updateProgress(value) {
     const val = Math.round(value);
@@ -47,16 +43,17 @@ function simulateProgress() {
 
 /**
  * Atualiza o estado do botão "Carregar Mais".
- * @param {boolean} isLoading - Indica se as atividades estão sendo carregadas.
  */
 function updateLoadMoreButton(isLoading) {
     if (!loadMoreBtn) return;
 
     if (isLoading) {
         loadMoreBtn.disabled = true;
-        loadMoreBtn.textContent = 'Carregando...';
+        loadMoreBtn.textContent = window.t('activities.loading', 'Carregando...');
     } else {
         loadMoreBtn.disabled = !hasMorePages;
-        loadMoreBtn.textContent = hasMorePages ? 'Carregar Mais Atividades' : 'Todas as atividades foram carregadas';
+        loadMoreBtn.textContent = hasMorePages 
+            ? window.t('activities.loadMore', 'Carregar Mais Atividades') 
+            : window.t('activities.allLoaded', 'Todas as atividades foram carregadas');
     }
 }

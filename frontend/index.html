@@ -182,11 +182,11 @@
         .activity-card { 
             background-color: var(--bg-color);
             border: 1px solid var(--border-color); 
-            padding: 12px; /* Reduzido de 15px para 12px */
+            padding: 12px;
             border-radius: 6px; 
             cursor: pointer; 
             transition: all 0.2s ease;
-            min-height: 100px; /* Ajustado para acomodar o tipo */
+            min-height: 100px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -218,7 +218,7 @@
         }
 
         .activity-card.no-gps:hover {
-            transform: none; /* Remove animação de hover para cards sem GPS */
+            transform: none;
             box-shadow: none;
         }
 
@@ -230,7 +230,7 @@
             border: 1px solid var(--border-color); 
             background-color: var(--bg-color);
         }
-        /* Estilo dark para os tiles do mapa */
+
         .leaflet-tile-pane {
             filter: invert(1) hue-rotate(180deg) brightness(95%) contrast(90%);
         }
@@ -254,16 +254,14 @@
         .result-message .info { background-color: var(--info-bg); color: var(--info-text); border-color: var(--info-border); }
 
         .gps-badge { 
-            font-size: 0.65rem; /* Ligeiramente menor */
-            padding: 2px 6px; /* Padding reduzido */
-            border-radius: 8px; /* Border radius reduzido */
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 8px;
             color: white; 
             font-weight: 500;
-            flex-shrink: 0; /* Impede que o badge encolha */
-            align-self: flex-start; /* Alinha no topo */
+            flex-shrink: 0;
+            align-self: flex-start;
         }
-        .gps-badge { background-color: #238636; }
-        .no-gps-badge { background-color: #6a737d; }
         .gps-badge.has-gps { 
             background-color: var(--button-bg); 
         }
@@ -343,7 +341,6 @@
             height: 24px;
         }
 
-        /* Layout responsivo para video section */
         #videoSection .video-controls-container {
             display: flex;
             gap: 20px;
@@ -371,23 +368,22 @@
 
        @media (max-width: 768px) {
             .activity-grid {
-                grid-template-columns: 1fr; /* Uma coluna em mobile */
+                grid-template-columns: 1fr;
                 gap: 12px;
             }
             
             .activity-card {
-                min-height: 70px; /* Ainda mais compacto em mobile */
+                min-height: 70px;
                 padding: 10px;
             }
         }
 
         @media (min-width: 1200px) {
             .activity-grid {
-                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); /* Ainda menor em telas grandes */
+                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
             }
         }
 
-        /* NOVO: Indicador de configuração */
         .config-indicator {
             position: fixed;
             bottom: 20px;
@@ -410,77 +406,78 @@
 </head>
 <body>
 
-    <!-- HEADER MODIFICADO COM STATUS INTEGRADO -->
+    <!-- HEADER MODIFICADO COM STATUS -->
     <div class="header">
         <div class="header-left">
-            <h1>Strava Video Overlay</h1>
+            <h1 data-i18n="app.title">Strava Video Overlay</h1>
         </div>
         <div class="header-right">
             <div class="status-indicator checking" id="statusIndicator">
                 <div class="status-dot checking" id="statusDot"></div>
-                <span id="statusText">Verificando conexão...</span>
+                <span id="statusText" data-i18n="header.status.checking">Verificando conexão...</span>
             </div>
-            <button class="auth-btn" id="authBtn">Autenticar com Strava</button>
+            <button class="auth-btn" id="authBtn" data-i18n="header.status.authButton">Autenticar com Strava</button>
+            <!-- Seletor de idioma será inserido aqui via JavaScript -->
         </div>
     </div>
 
     <div class="container">
         <!-- Seção de Atividades -->
         <section id="activitiesSection" class="hidden">
-            <h2>Minhas Atividades</h2>
+            <h2 data-i18n="activities.title">Minhas Atividades</h2>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <div>
                     <input type="checkbox" id="filterGPS" checked>
-                    <label for="filterGPS">Mostrar apenas atividades com GPS</label>
+                    <label for="filterGPS" data-i18n="activities.filterGPS">Mostrar apenas atividades com GPS</label>
                 </div>
                 <button id="refreshActivitiesBtn" style="padding: 8px 16px;">
-                    🔄 Atualizar Lista
+                    🔄 <span data-i18n="activities.refresh">Atualizar Lista</span>
                 </button>
             </div>
             <div id="stats">
                 <span id="totalActivities"></span> | <span id="gpsActivities"></span>
             </div>
             <div id="activitiesGrid" class="activity-grid"></div>
-            <button id="loadMoreBtn" style="margin-top: 20px;">Carregar Mais</button>
+            <button id="loadMoreBtn" style="margin-top: 20px;" data-i18n="activities.loadMore">Carregar Mais</button>
         </section>
 
         <!-- Seção de Detalhes da Atividade e Mapa -->
         <section id="activityDetail" class="hidden">
-            <h2>Detalhes da Atividade</h2>
+            <h2 data-i18n="activityDetail.title">Detalhes da Atividade</h2>
             <div id="activityInfo"></div>
             <div id="mapContainer"></div>
         </section>
 
         <!-- Seção de Processamento de Vídeo -->
        <section id="videoSection" class="hidden">
-            <h2>Processar Vídeo com Overlay</h2>
+            <h2 data-i18n="video.title">Processar Vídeo com Overlay</h2>
             
             <div class="video-controls-container">
                 <div class="video-info-section">
-                    <button id="selectVideoBtn">Selecionar Vídeo</button>
+                    <button id="selectVideoBtn" data-i18n="video.selectVideo">Selecionar Vídeo</button>
                     <div id="videoInfo"></div>
                 </div>
                 
                 <!-- Controle de posição do overlay -->
                 <div id="overlayPositionControl" class="hidden">
-                    <h4>Posição do Overlay</h4>
+                    <h4 data-i18n="video.overlayPosition.title">Posição do Overlay</h4>
                     <div class="position-grid">
-                        <button class="position-btn" data-position="top-left" title="Canto Superior Esquerdo">
+                        <button class="position-btn" data-position="top-left" data-i18n-title="video.overlayPosition.topLeft">
                             <svg width="24" height="24" viewBox="0 0 24 24">
                                 <path d="M7,7 L17,7 L17,9 L9,9 L9,17 L7,17 Z" fill="currentColor"/>
                             </svg>
                         </button>
-                        <button class="position-btn" data-position="top-right" title="Canto Superior Direito">
+                        <button class="position-btn" data-position="top-right" data-i18n-title="video.overlayPosition.topRight">
                             <svg width="24" height="24" viewBox="0 0 24 24">
                                 <path d="M17,7 L17,17 L15,17 L15,9 L7,9 L7,7 Z" fill="currentColor"/>
                             </svg>
                         </button>
-                        <button class="position-btn selected" data-position="bottom-left" title="Canto Inferior Esquerdo">
+                        <button class="position-btn selected" data-position="bottom-left" data-i18n-title="video.overlayPosition.bottomLeft">
                             <svg width="24" height="24" viewBox="0 0 24 24">
                                 <path d="M7,17 L7,7 L9,7 L9,15 L17,15 L17,17 Z" fill="currentColor"/>
                             </svg>
                         </button>
-                        <button class="position-btn" data-position="bottom-right" title="Canto Inferior Direito">
+                        <button class="position-btn" data-position="bottom-right" data-i18n-title="video.overlayPosition.bottomRight">
                             <svg width="24" height="24" viewBox="0 0 24 24">
                                 <path d="M17,17 L7,17 L7,15 L15,15 L15,7 L17,7 Z" fill="currentColor"/>
                             </svg>
@@ -489,7 +486,7 @@
                 </div>
             </div>
             
-            <button id="processBtn" disabled>Processar com Overlay</button>
+            <button id="processBtn" disabled data-i18n="video.process">Processar com Overlay</button>
             
             <div id="progress" class="hidden" style="margin-top: 15px;">
                 <div id="progressBarContainer" style="background-color: var(--border-color); border-radius: 5px;">
@@ -504,33 +501,35 @@
 
     <!-- NOVO: Indicador de configuração -->
     <div id="configIndicator" class="config-indicator">
-        ⚙️ Carregando configurações...
+        <span data-i18n="config.loading">⚙️ Carregando configurações...</span>
     </div>
 
     <!-- Scripts Modulares - ORDEM IMPORTANTE! -->
     <script src="js/globals.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/ui.js"></script>
-    <script src="js/config.js"></script> <!-- NOVO: Deve vir antes dos outros -->
+    <script src="js/i18n.js"></script> <!-- NOVO: i18n antes de tudo -->
+    <script src="js/config.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/activities.js"></script>
     <script src="js/map.js"></script>
     <script src="js/overlayPosition.js"></script>
     <script src="js/video.js"></script>
-    <script src="js/app.js"></script> <!-- Por último -->
+    <script src="js/app.js"></script>
     
     <script>
-        // NOVO: Atualiza indicador de configuração
+        // Atualiza indicador de configuração
         document.addEventListener('DOMContentLoaded', function() {
             const indicator = document.getElementById('configIndicator');
             
-            // Remove após 5 segundos ou quando config estiver carregada
             setTimeout(() => {
                 if (window.configService && window.configService.initialized) {
-                    indicator.textContent = '✅ Configurações carregadas';
+                    indicator.querySelector('span').setAttribute('data-i18n', 'config.loaded');
+                    indicator.querySelector('span').textContent = window.t('config.loaded', '✅ Configurações carregadas');
                     indicator.classList.add('loaded');
                 } else {
-                    indicator.textContent = '⚠️ Configurações padrão';
+                    indicator.querySelector('span').setAttribute('data-i18n', 'config.default');
+                    indicator.querySelector('span').textContent = window.t('config.default', '⚠️ Configurações padrão');
                 }
                 
                 // Remove após mais 3 segundos

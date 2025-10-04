@@ -140,7 +140,7 @@ async function displayMap(activity) {
 async function loadInterpolatedTrajectory(activity) {
     try {
         console.log("📈 Carregando trajeto detalhado...");
-        showMessage(result, 'Carregando trajeto detalhado...', 'info');
+        showMessage(result, window.t('video.messages.loadingTrajectory', 'Carregando trajeto detalhado...'), 'info');
 
         const fullTrajectory = await window.go.main.App.GetFullGPSTrajectory(activity.id);
 
@@ -162,11 +162,11 @@ async function loadInterpolatedTrajectory(activity) {
         console.log("📍 Adicionando marcadores de início e fim...");
         
         L.marker([startPoint.lat, startPoint.lng]).addTo(activityMap)
-            .bindPopup('🏁 Início da atividade')
+            .bindPopup(window.t('map.markers.start', '🏁 Início da atividade'))
             .openPopup();
             
         L.marker([endPoint.lat, endPoint.lng]).addTo(activityMap)
-            .bindPopup('🏆 Fim da atividade');
+           .bindPopup(window.t('map.markers.end', '🏆 Fim da atividade'));
 
         // Ajusta a visualização para mostrar toda a trajetória
         const bounds = L.latLngBounds(fullTrajectory.map(p => [p.lat, p.lng]));
@@ -177,7 +177,7 @@ async function loadInterpolatedTrajectory(activity) {
         
         console.log("🎯 Mapa ajustado para mostrar toda a trajetória");
         
-        showMessage(result, `✅ Trajeto colorido carregado: ${fullTrajectory.length} pontos GPS`, 'success');
+        showMessage(result, `✅ ${window.t('video.messages.trajectoryLoaded', 'Trajeto carregado')}: ${fullTrajectory.length} ${window.t('map.gpsPoints', 'pontos GPS')}`, 'success');
 
     } catch (error) {
         console.error("❌ Erro ao carregar trajeto:", error);
@@ -382,27 +382,27 @@ function addSpeedLegend() {
                 <div style="font-weight: bold; margin-bottom: 5px;">🏃 Velocidade</div>
                 <div style="display: flex; align-items: center; margin: 2px 0;">
                     <div style="width: 15px; height: 3px; background: #6c757d; margin-right: 5px;"></div>
-                    Parado (0-3 km/h)
+                    ${window.t('map.speedLegend.stopped', 'Parado (0-3 km/h)')}
                 </div>
                 <div style="display: flex; align-items: center; margin: 2px 0;">
                     <div style="width: 15px; height: 3px; background: #0d6efd; margin-right: 5px;"></div>
-                    Muito lento (3-8 km/h)
+                     ${window.t('map.speedLegend.verySlow', 'Muito lento (3-8 km/h)')}
                 </div>
                 <div style="display: flex; align-items: center; margin: 2px 0;">
                     <div style="width: 15px; height: 3px; background: #198754; margin-right: 5px;"></div>
-                    Lento (8-15 km/h)
+                    ${window.t('map.speedLegend.slow', 'Lento (8-15 km/h)')}
                 </div>
                 <div style="display: flex; align-items: center; margin: 2px 0;">
                     <div style="width: 15px; height: 3px; background: #fd7e14; margin-right: 5px;"></div>
-                    Moderado (15-25 km/h)
+                   ${window.t('map.speedLegend.medium', 'Moderado (15-25 km/h)')}
                 </div>
                 <div style="display: flex; align-items: center; margin: 2px 0;">
                     <div style="width: 15px; height: 3px; background: #d63384; margin-right: 5px;"></div>
-                    Rápido (25-40 km/h)
+                    ${window.t('map.speedLegend.fast', 'Rápido (25-40 km/h)')}
                 </div>
                 <div style="display: flex; align-items: center; margin: 2px 0;">
                     <div style="width: 15px; height: 3px; background: #dc3545; margin-right: 5px;"></div>
-                    Muito rápido (40+ km/h)
+                    ${window.t('map.speedLegend.veryFast', 'Muito rápido (40+ km/h)')}
                 </div>
             </div>
         `;
@@ -440,14 +440,14 @@ function loadFallbackTrajectory(activity) {
                 L.marker(latlngs[latlngs.length - 1]).addTo(activityMap).bindPopup('🏆 Fim');
             }
             
-            showMessage(result, 'Trajeto básico carregado (dados GPS limitados)', 'info');
+            showMessage(result, window.t('map.messages.basicTrajectory', 'Trajeto básico carregado (dados GPS limitados)'), 'info');
             console.log("✅ Trajeto simplificado carregado com sucesso");
         } else {
             throw new Error('Nenhum dado de trajeto disponível');
         }
     } catch (error) {
         console.error("❌ Erro no fallback do trajeto:", error);
-        showMessage(result, 'Erro: Nenhum dado GPS disponível para esta atividade', 'error');
+        showMessage(result, window.t('errors.noGPSData', 'Erro: Nenhum dado GPS disponível para esta atividade'), 'error');
     }
 }
 
@@ -463,7 +463,7 @@ async function handleMapClickBasic(e) {
 
     try {
         console.log(`🖱️ Clique básico no mapa detectado em: ${e.latlng.lat}, ${e.latlng.lng}`);
-        showMessage(result, 'Buscando ponto GPS mais próximo...', 'info');
+        showMessage(result, window.t('map.messages.searching', 'Buscando ponto GPS mais próximo...'), 'info');
 
         const point = await window.go.main.App.GetGPSPointForMapClick(selectedActivity.id, e.latlng.lat, e.latlng.lng);
         
@@ -476,7 +476,7 @@ async function handleMapClickBasic(e) {
             showMessage(result, `🎯 Sincronização definida: ${timeStr}`, 'success');
         } else {
             console.log("❌ Nenhum ponto GPS encontrado");
-            showMessage(result, 'Não foi possível encontrar um ponto GPS próximo', 'error');
+            showMessage(result, window.t('errors.noGPSData', 'Não foi possível encontrar um ponto GPS próximo'), 'error');
         }
 
     } catch (error) {
@@ -844,7 +844,7 @@ function addLayerSelector() {
                     font-size: 14px;
                     text-align: center;
                 ">
-                    🗺️ Provedor de Mapa
+                    ${window.t('map.provider', '🗺️ Provedor de Mapa')}
                 </div>
                 
                 <select id="mapTypeSelector" style="
@@ -866,7 +866,7 @@ function addLayerSelector() {
                     margin-bottom: 8px;
                     text-align: center;
                 ">
-                    Atual: <span id="currentMapType">${MAP_PROVIDERS[currentMapProvider]?.name || 'OpenStreetMap'}</span>
+                   ${window.t('map.current', 'Atual')}: <span id="currentMapType">${MAP_PROVIDERS[currentMapProvider]?.name || 'OpenStreetMap'}</span>
                 </div>
                 
                 <div style="
@@ -877,7 +877,7 @@ function addLayerSelector() {
                     color: var(--secondary-text);
                     text-align: center;
                 ">
-                    ${Object.keys(MAP_PROVIDERS).length} provedores disponíveis
+                    ${Object.keys(MAP_PROVIDERS).length} ${window.t('map.available', 'provedores disponíveis')}
                 </div>
             </div>
         `;

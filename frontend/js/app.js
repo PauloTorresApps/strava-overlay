@@ -1,39 +1,97 @@
-console.log('🚀 app.js carregando (versão com config)...');
+console.log('🚀 app.js carregando (versão com i18n)...');
 
 /**
  * Função de inicialização principal da aplicação.
- * É chamada quando o DOM está completamente carregado.
  */
 async function initApp() {
-    console.log('🚀 Strava Add Overlay iniciado');
+    console.log('🚀 Strava Add Overlay iniciando');
     
-    // NOVO: Inicializa configurações ANTES de tudo
+    // 1. PRIMEIRO: Inicializa i18n
+    try {
+        console.log('🌍 Inicializando sistema de internacionalização...');
+        await window.i18n.initialize();
+        console.log('✅ Sistema i18n inicializado');
+    } catch (error) {
+        console.error('❌ Erro ao inicializar i18n:', error);
+        console.log('🔄 Continuando sem i18n...');
+    }
+    
+    // 2. Inicializa configurações
     try {
         console.log('⚙️ Inicializando configurações...');
         await window.initializeConfig();
-        console.log('✅ Configurações inicializadas com sucesso');
+        console.log('✅ Configurações inicializadas');
     } catch (error) {
         console.error('❌ Erro ao inicializar configurações:', error);
         console.log('🔄 Continuando com configurações padrão...');
     }
     
+    // 3. Inicializa elementos DOM
     initializeDOMElements();
+    
+    // 4. Adiciona event listeners
     addEventListeners();
 
+    // 5. Inicializa controle de posição
     if (window.overlayPosition) {
         window.overlayPosition.init();
         console.log('✅ Controle de posição inicializado');
     }
     
-    // Verifica a autenticação automaticamente na inicialização
+    // 6. Verifica autenticação
     setTimeout(checkAuthenticationOnStartup, 500);
+    
+    // 7. Escuta mudanças de idioma para atualizar UI dinâmica
+    window.addEventListener('localeChanged', handleLocaleChange);
 }
 
 /**
- * Mapeia as variáveis globais para os elementos do DOM.
+ * Handler para mudanças de idioma
+ */
+function handleLocaleChange(event) {
+    console.log(`🌍 Idioma alterado para: ${event.detail.locale}`);
+    
+    // Atualiza textos dinâmicos que não usam data-i18n
+    updateDynamicTexts();
+    
+    // Re-renderiza atividades se estiverem carregadas
+    if (allActivities && allActivities.length > 0) {
+        displayActivities(getFilteredActivities());
+    }
+    
+    // Atualiza detalhes da atividade se estiver visível
+    if (selectedActivity && !activityDetail.classList.contains('hidden')) {
+        // Re-renderiza os detalhes com novo idioma
+        displayActivityDetailWithI18n(selectedActivity);
+    }
+    
+    // Atualiza estatísticas
+    updateStatistics();
+    
+    // Atualiza botão de carregar mais
+    updateLoadMoreButton(isLoadingMore);
+}
+
+/**
+ * Atualiza textos dinâmicos que não podem usar data-i18n
+ */
+function updateDynamicTexts() {
+    // Atualiza título do documento
+    document.title = window.t('app.title', 'Strava Video Overlay');
+    
+    // Atualiza placeholders se necessário
+    const placeholders = document.querySelectorAll('[data-i18n-placeholder]');
+    placeholders.forEach(element => {
+        const key = element.getAttribute('data-i18n-placeholder');
+        element.placeholder = window.t(key);
+    });
+}
+
+/**
+ * Mapeia as variáveis globais para os elementos do DOM
  */
 function initializeDOMElements() {
-    // Elementos do header (removido authStatus que não existe mais)
+    // Elementos do header
     statusIndicator = document.getElementById('statusIndicator');
     statusText = document.getElementById('statusText');
     authBtn = document.getElementById('authBtn');
@@ -62,7 +120,6 @@ function initializeDOMElements() {
     gpsActivitiesSpan = document.getElementById('gpsActivities');
     refreshActivitiesBtn = document.getElementById('refreshActivitiesBtn');
     
-    // Debug: verificar elementos críticos
     const criticalElements = {
         mapContainer,
         activitiesSection,
@@ -83,19 +140,15 @@ function initializeDOMElements() {
 }
 
 /**
- * Adiciona os event listeners aos elementos do DOM.
+ * Adiciona os event listeners aos elementos do DOM
  */
 function addEventListeners() {
-    // Event listeners para funcionalidades de vídeo
     if (selectVideoBtn) selectVideoBtn.addEventListener('click', selectVideo);
     if (processBtn) processBtn.addEventListener('click', processVideo);
-    
-    // Event listeners para atividades
     if (loadMoreBtn) loadMoreBtn.addEventListener('click', loadMoreActivities);
     if (filterGPSCheckbox) filterGPSCheckbox.addEventListener('change', handleFilterChange);
     if (refreshActivitiesBtn) refreshActivitiesBtn.addEventListener('click', refreshActivities);
     
-    // Event listener para redimensionamento da janela (importante para o mapa)
     window.addEventListener('resize', debounce(() => {
         if (activityMap) {
             console.log('🔄 Redimensionamento detectado, invalidando mapa...');
@@ -109,56 +162,12 @@ function addEventListeners() {
 }
 
 /**
- * Seleciona uma atividade e carrega seus detalhes.
- * @param {object} activity - A atividade selecionada.
- * @param {HTMLElement} cardElement - O elemento do card clicado.
+ * Exibe detalhes da atividade com internacionalização
  */
-async function selectActivity(activity, cardElement) {
-    try {
-        console.log('🎯 Selecionando atividade:', activity.name);
-        
-        // Remove seleção anterior
-        document.querySelectorAll('.activity-card.selected').forEach(el => {
-            el.classList.remove('selected');
-        });
-        
-        // Marca nova seleção
-        cardElement.classList.add('selected');
-        selectedActivity = activity;
+function displayActivityDetailWithI18n(activity) {
+    if (!activityInfo || !activity) return;
 
-        // Carrega detalhes da atividade
-        console.log('📊 Carregando detalhes da atividade...');
-        const detail = await window.go.main.App.GetActivityDetail(activity.id);
-        displayActivityDetail(detail);
-        
-        // Mostra seções
-        if (activityDetail) activityDetail.classList.remove('hidden');
-        if (videoSection) videoSection.classList.remove('hidden');
-        
-        // Carrega mapa - com delay para garantir que a seção esteja visível
-        console.log('🗺️ Preparando para carregar mapa...');
-        setTimeout(async () => {
-            try {
-                await displayMap(activity);
-            } catch (error) {
-                console.error('❌ Erro ao carregar mapa:', error);
-                showMessage(result, `Erro ao carregar mapa: ${error.message}`, 'error');
-            }
-        }, 100);
-
-    } catch (error) {
-        console.error('❌ Erro ao selecionar atividade:', error);
-        showMessage(result, `Erro ao carregar detalhes: ${error.message}`, 'error');
-    }
-}
-
-/**
- * Exibe os detalhes de uma atividade na seção de informações.
- * @param {object} detail - Os dados detalhados da atividade.
- */
-function displayActivityDetail(detail) {
-    if (!activityInfo) return;
-
+    const detail = activity.detail || activity; // Suporta tanto Activity quanto ActivityDetail
     const startDate = new Date(detail.start_date);
     const distance = (detail.distance / 1000).toFixed(2);
     const elevation = detail.total_elevation_gain ? detail.total_elevation_gain.toFixed(0) : 'N/A';
@@ -168,29 +177,65 @@ function displayActivityDetail(detail) {
     activityInfo.innerHTML = `
         <div class="info-grid">
             <div class="info-item">
-                <h4>Informações Básicas</h4>
-                <p><strong>Nome:</strong> ${detail.name}</p>
-                <p><strong>Tipo:</strong> ${translateActivityType(detail.type)}</p>
-                <p><strong>Data:</strong> ${formatDate(startDate)}</p>
-                <p><strong>Horário:</strong> ${formatTime(startDate)}</p>
+                <h4>${window.t('activityDetail.basicInfo.title', 'Informações Básicas')}</h4>
+                <p><strong>${window.t('activityDetail.basicInfo.name', 'Nome')}:</strong> ${detail.name}</p>
+                <p><strong>${window.t('activityDetail.basicInfo.type', 'Tipo')}:</strong> ${translateActivityType(detail.type)}</p>
+                <p><strong>${window.t('activityDetail.basicInfo.date', 'Data')}:</strong> ${formatDate(startDate)}</p>
+                <p><strong>${window.t('activityDetail.basicInfo.time', 'Horário')}:</strong> ${formatTime(startDate)}</p>
             </div>
             <div class="info-item">
-                <h4>Desempenho</h4>
-                <p><strong>Distância:</strong> ${distance} km</p>
-                <p><strong>Duração:</strong> ${formatDuration(detail.moving_time)}</p>
-                <p><strong>Vel. Máxima:</strong> ${maxSpeed} km/h</p>
-                <p><strong>Calorias:</strong> ${calories}</p>
-                <p><strong>Ganho de Elevação:</strong> ${elevation} m</p>
+                <h4>${window.t('activityDetail.performance.title', 'Desempenho')}</h4>
+                <p><strong>${window.t('activityDetail.performance.distance', 'Distância')}:</strong> ${distance} km</p>
+                <p><strong>${window.t('activityDetail.performance.duration', 'Duração')}:</strong> ${formatDuration(detail.moving_time)}</p>
+                <p><strong>${window.t('activityDetail.performance.maxSpeed', 'Vel. Máxima')}:</strong> ${maxSpeed} km/h</p>
+                <p><strong>${window.t('activityDetail.performance.calories', 'Calorias')}:</strong> ${calories}</p>
+                <p><strong>${window.t('activityDetail.performance.elevation', 'Ganho de Elevação')}:</strong> ${elevation} m</p>
             </div>
         </div>
     `;
 }
 
 /**
- * Função debounce para evitar execuções excessivas.
- * @param {Function} func - Função a ser executada
- * @param {number} wait - Tempo de espera em ms
- * @returns {Function} Função com debounce aplicado
+ * Seleciona uma atividade e carrega seus detalhes
+ */
+async function selectActivity(activity, cardElement) {
+    try {
+        console.log('🎯 Selecionando atividade:', activity.name);
+        
+        document.querySelectorAll('.activity-card.selected').forEach(el => {
+            el.classList.remove('selected');
+        });
+        
+        cardElement.classList.add('selected');
+        selectedActivity = activity;
+
+        console.log('📊 Carregando detalhes da atividade...');
+        const detail = await window.go.main.App.GetActivityDetail(activity.id);
+        selectedActivity.detail = detail; // Armazena detail para uso posterior
+        
+        displayActivityDetailWithI18n(detail);
+        
+        if (activityDetail) activityDetail.classList.remove('hidden');
+        if (videoSection) videoSection.classList.remove('hidden');
+        
+        console.log('🗺️ Preparando para carregar mapa...');
+        setTimeout(async () => {
+            try {
+                await displayMap(activity);
+            } catch (error) {
+                console.error('❌ Erro ao carregar mapa:', error);
+                showMessage(result, window.t('errors.loadFailed', 'Erro ao carregar') + `: ${error.message}`, 'error');
+            }
+        }, 100);
+
+    } catch (error) {
+        console.error('❌ Erro ao selecionar atividade:', error);
+        showMessage(result, window.t('errors.loadFailed', 'Erro ao carregar') + `: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Função debounce
  */
 function debounce(func, wait) {
     let timeout;
@@ -205,13 +250,11 @@ function debounce(func, wait) {
 }
 
 /**
- * Força a atualização do layout do mapa quando necessário.
+ * Força a atualização do layout do mapa
  */
 function forceMapUpdate() {
     if (activityMap && mapContainer) {
         console.log('🔄 Forçando atualização do mapa...');
-        
-        // Aguarda um pouco e então invalida o tamanho
         setTimeout(() => {
             try {
                 activityMap.invalidateSize();
@@ -224,7 +267,7 @@ function forceMapUpdate() {
 }
 
 /**
- * Observador de mudanças de visibilidade para corrigir problemas do mapa.
+ * Observador de mudanças de visibilidade
  */
 function setupMapVisibilityObserver() {
     if (!mapContainer) return;
@@ -242,7 +285,7 @@ function setupMapVisibilityObserver() {
 }
 
 /**
- * NOVA FUNÇÃO: Mostra informações de configuração na tela (para debug)
+ * Mostra informações de configuração (debug)
  */
 function showConfigInfo() {
     if (window.configService && window.configService.initialized) {
@@ -255,20 +298,23 @@ function showConfigInfo() {
         console.log('Mapbox disponível:', window.configService.isProviderAvailable('mapbox'));
         console.groupEnd();
     }
+    
+    if (window.i18n && window.i18n.currentLocale) {
+        console.group('🌍 Informações de i18n');
+        console.log('Idioma atual:', window.i18n.currentLocale);
+        console.log('Idiomas disponíveis:', window.i18n.availableLocales.map(l => l.code));
+        console.groupEnd();
+    }
 }
 
-// --- Ponto de Entrada ---
+// Ponto de Entrada
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
-    
-    // Configura observador do mapa após inicialização
     setTimeout(setupMapVisibilityObserver, 1000);
-    
-    // NOVO: Mostra informações de config após 2 segundos (para debug)
     setTimeout(showConfigInfo, 2000);
 });
 
-// Adiciona handlers globais para depuração
+// Handlers globais para depuração
 window.addEventListener('error', (event) => {
     console.error('❌ Erro global:', event.error);
 });

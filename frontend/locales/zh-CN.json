@@ -1,0 +1,135 @@
+{
+  "app": {
+    "title": "Strava 视频叠加",
+    "loading": "加载中..."
+  },
+  "header": {
+    "status": {
+      "checking": "检查连接中...",
+      "connected": "已连接到 Strava",
+      "error": "未连接",
+      "authButton": "使用 Strava 认证"
+    }
+  },
+  "activities": {
+    "title": "我的活动",
+    "filterGPS": "仅显示有 GPS 的活动",
+    "refresh": "刷新列表",
+    "stats": {
+      "total": "已加载活动",
+      "withGPS": "包含 GPS"
+    },
+    "loadMore": "加载更多",
+    "allLoaded": "所有活动已加载",
+    "loading": "加载中...",
+    "noGPS": "此活动没有 GPS 数据",
+    "noActivities": "未找到符合筛选条件的活动。",
+    "types": {
+      "Ride": "骑行",
+      "Run": "跑步",
+      "Hike": "徒步",
+      "Walk": "步行",
+      "Swimming": "游泳",
+      "Workout": "锻炼",
+      "WeightTraining": "力量训练",
+      "VirtualRide": "虚拟骑行",
+      "VirtualRun": "虚拟跑步",
+      "EBikeRide": "电动自行车"
+    }
+  },
+  "activityDetail": {
+    "title": "活动详情",
+    "basicInfo": {
+      "title": "基本信息",
+      "name": "名称",
+      "type": "类型",
+      "date": "日期",
+      "time": "时间"
+    },
+    "performance": {
+      "title": "表现",
+      "distance": "距离",
+      "duration": "时长",
+      "maxSpeed": "最高速度",
+      "calories": "卡路里",
+      "elevation": "海拔增益"
+    }
+  },
+  "video": {
+    "title": "使用叠加处理视频",
+    "selectVideo": "选择视频",
+    "selectedVideo": "已选择视频",
+    "overlayPosition": {
+      "title": "叠加位置",
+      "topLeft": "左上角",
+      "topRight": "右上角",
+      "bottomLeft": "左下角",
+      "bottomRight": "右下角"
+    },
+    "process": "使用叠加处理",
+    "processing": "处理中...",
+    "messages": {
+      "autoSync": "已找到自动起始点！",
+      "manualSync": "点击地图手动设置",
+      "success": "视频处理成功！",
+      "location": "位置",
+      "syncSet": "同步已设置",
+      "loadingTrajectory": "加载详细轨迹中...",
+      "overlaySet": "叠加将定位在",
+      "trajectoryLoaded": "轨迹已加载"
+    }
+  },
+  "map": {
+    "provider": "地图提供商",
+    "current": "当前",
+    "available": "可用提供商",
+    "categories": {
+      "sports": "运动",
+      "satellite": "卫星",
+      "streets": "街道与导航",
+      "dark": "深色模式",
+      "terrain": "地形"
+    },
+    "overlayPosition": {
+      "topLeft": "左上角",
+      "topRight": "右上角",
+      "bottomLeft": "左下角",
+      "bottomRight": "右下角"
+    },
+    "markers": {
+      "start": "活动开始",
+      "end": "活动结束",
+      "videoStart": "视频手动开始",
+      "autoStart": "自动开始（点击轨迹调整）"
+    },
+    "speedLegend": {
+      "title": "🏃 速度",
+      "stopped": "停止 (0-3 km/h)",
+      "verySlow": "很慢 (3-8 km/h)",
+      "slow": "慢 (8-15 km/h)",
+      "medium": "中等 (15-25 km/h)",
+      "fast": "快 (25-40 km/h)",
+      "veryFast": "很快 (40+ km/h)"
+    }
+  },
+  "messages": {
+    "success": "成功",
+    "error": "错误",
+    "warning": "警告",
+    "info": "信息",
+    "basicTrajectory": "基本轨迹已加载（GPS数据有限）",
+    "searching": "搜索最近的GPS点..."
+  },
+  "errors": {
+    "selectActivityFirst": "请先选择活动和视频",
+    "noGPSData": "此活动没有可用的 GPS 数据",
+    "processingFailed": "处理失败",
+    "loadFailed": "加载失败",
+    "authRequired": "需要认证"
+  },
+  "config": {
+    "loading": "加载配置中...",
+    "loaded": "配置已加载",
+    "default": "默认配置"
+  }
+}

@@ -1,8 +1,7 @@
 console.log('🚴 activities.js carregando...');
 
 /**
- * Carrega uma página específica de atividades do backend.
- * @param {number} page - O número da página a ser carregada.
+ * Carrega uma página específica de atividades
  */
 async function loadActivitiesPage(page) {
     if (isLoadingMore) return;
@@ -28,7 +27,7 @@ async function loadActivitiesPage(page) {
 
     } catch (error) {
         console.error('❌ Erro ao carregar atividades:', error);
-        showMessage(result, `Erro: ${error}`, 'error');
+        showMessage(result, window.t('errors.loadFailed', 'Erro ao carregar') + `: ${error}`, 'error');
     } finally {
         isLoadingMore = false;
         updateLoadMoreButton(false);
@@ -36,7 +35,7 @@ async function loadActivitiesPage(page) {
 }
 
 /**
- * Carrega a próxima página de atividades.
+ * Carrega a próxima página de atividades
  */
 function loadMoreActivities() {
     if (!hasMorePages || isLoadingMore) return;
@@ -44,16 +43,14 @@ function loadMoreActivities() {
 }
 
 /**
- * Filtra as atividades com base na configuração do checkbox.
- * @returns {Array} A lista de atividades filtrada.
+ * Filtra as atividades com base no checkbox
  */
 function getFilteredActivities() {
     return showOnlyGPS ? allActivities.filter(activity => activity.has_gps) : allActivities;
 }
 
 /**
- * Manipula a mudança no filtro de GPS.
- * @param {Event} event - O evento de mudança do checkbox.
+ * Manipula a mudança no filtro de GPS
  */
 function handleFilterChange(event) {
     showOnlyGPS = event.target.checked;
@@ -62,28 +59,32 @@ function handleFilterChange(event) {
 }
 
 /**
- * Atualiza as estatísticas de atividades (total e com GPS).
+ * Atualiza as estatísticas de atividades
  */
 function updateStatistics() {
     const totalCount = allActivities.length;
     const gpsCount = allActivities.filter(a => a.has_gps).length;
 
-    if (totalActivitiesSpan) totalActivitiesSpan.textContent = `${totalCount} atividades carregadas`;
-    if (gpsActivitiesSpan) gpsActivitiesSpan.textContent = `${gpsCount} com GPS`;
+    if (totalActivitiesSpan) {
+        totalActivitiesSpan.textContent = `${totalCount} ${window.t('activities.stats.total', 'atividades carregadas')}`;
+    }
+    if (gpsActivitiesSpan) {
+        gpsActivitiesSpan.textContent = `${gpsCount} ${window.t('activities.stats.withGPS', 'com GPS')}`;
+    }
 }
 
 /**
- * Renderiza a lista de atividades na tela.
- * @param {Array} activities - A lista de atividades para exibir.
+ * Renderiza a lista de atividades
  */
 function displayActivities(activities) {
     if (!activitiesGrid) return;
     activitiesGrid.innerHTML = '';
 
     if (!activities || activities.length === 0) {
-        activitiesGrid.innerHTML = '<p>Nenhuma atividade encontrada com os filtros aplicados.</p>';
+        activitiesGrid.innerHTML = `<p>${window.t('activities.noActivities', 'Nenhuma atividade encontrada com os filtros aplicados.')}</p>`;
         return;
     }
+    
     activities.forEach(activity => {
         const card = createActivityCard(activity);
         activitiesGrid.appendChild(card);
@@ -91,9 +92,7 @@ function displayActivities(activities) {
 }
 
 /**
- * Cria um elemento de card para uma atividade - VERSÃO SIMPLIFICADA.
- * @param {object} activity - Os dados da atividade.
- * @returns {HTMLElement} O elemento do card criado.
+ * Cria um card de atividade com i18n
  */
 function createActivityCard(activity) {
     const card = document.createElement('div');
@@ -101,7 +100,7 @@ function createActivityCard(activity) {
     
     if (!activity.has_gps) {
         card.classList.add('no-gps');
-        card.title = 'Esta atividade não possui dados GPS';
+        card.title = window.t('activities.noGPS', 'Esta atividade não possui dados GPS');
     }
 
     if (activity.has_gps) {
@@ -116,9 +115,8 @@ function createActivityCard(activity) {
 
     const gpsBadge = activity.has_gps 
         ? '<span class="gps-badge has-gps">GPS</span>' 
-        : '<span class="gps-badge no-gps">Sem GPS</span>';
+        : `<span class="gps-badge no-gps">${window.t('activities.noGPS', 'Sem GPS')}</span>`;
     
-    // Usa o ícone apropriado
     const activityIcon = getActivityIcon(activity.type);
 
     card.innerHTML = `
@@ -143,9 +141,7 @@ function createActivityCard(activity) {
 }
 
 /**
- * Seleciona uma atividade, busca detalhes e exibe no mapa.
- * @param {object} activity - A atividade selecionada.
- * @param {HTMLElement} cardElement - O elemento do card clicado.
+ * Seleciona uma atividade
  */
 async function selectActivity(activity, cardElement) {
     try {
@@ -154,89 +150,52 @@ async function selectActivity(activity, cardElement) {
         selectedActivity = activity;
 
         const detail = await window.go.main.App.GetActivityDetail(activity.id);
-        displayActivityDetail(detail);
+        selectedActivity.detail = detail;
+        
+        displayActivityDetailWithI18n(detail);
         await displayMap(activity);
 
         if (activityDetail) activityDetail.classList.remove('hidden');
         if (videoSection) videoSection.classList.remove('hidden');
 
     } catch (error) {
-        showMessage(result, `Erro ao carregar detalhes: ${error}`, 'error');
+        showMessage(result, window.t('errors.loadFailed', 'Erro ao carregar') + `: ${error}`, 'error');
     }
 }
 
 /**
- * Exibe os detalhes de uma atividade na seção de informações.
- * @param {object} detail - Os dados detalhados da atividade.
- */
-function displayActivityDetail(detail) {
-    if (!activityInfo) return;
-
-    const startDate = new Date(detail.start_date);
-    const distance = (detail.distance / 1000).toFixed(2);
-    const elevation = detail.total_elevation_gain ? detail.total_elevation_gain.toFixed(0) : 'N/A';
-    const maxSpeed = detail.max_speed ? (detail.max_speed * 3.6).toFixed(1) : 'N/A';
-    const calories = detail.calories ? detail.calories.toFixed(0) : 'N/A';
-
-    activityInfo.innerHTML = `
-        <div class="info-grid">
-            <div class="info-item">
-                <h4>Informações Básicas</h4>
-                <p><strong>Nome:</strong> ${detail.name}</p>
-                <p><strong>Tipo:</strong> ${translateActivityType(detail.type)}</p>
-                <p><strong>Data:</strong> ${formatDate(startDate)}</p>
-                <p><strong>Horário:</strong> ${formatTime(startDate)}</p>
-            </div>
-            <div class="info-item">
-                <h4>Desempenho</h4>
-                <p><strong>Distância:</strong> ${distance} km</p>
-                <p><strong>Duração:</strong> ${formatDuration(detail.moving_time)}</p>
-                <p><strong>Vel. Máxima:</strong> ${maxSpeed} km/h</p>
-                <p><strong>Calorias:</strong> ${calories}</p>
-                <p><strong>Ganho de Elevação:</strong> ${elevation} m</p>
-            </div>
-        </div>
-    `;
-}
-
-/**
- * Atualiza a lista de atividades começando do início
+ * Atualiza a lista de atividades
  */
 async function refreshActivities() {
     if (isLoadingMore) return;
     
     console.log('🔄 Atualizando lista de atividades...');
     
-    // Desabilita o botão durante o refresh
     if (refreshActivitiesBtn) {
         refreshActivitiesBtn.disabled = true;
-        refreshActivitiesBtn.innerHTML = '⏳ Atualizando...';
+        refreshActivitiesBtn.innerHTML = `⏳ ${window.t('activities.loading', 'Carregando...')}`;
     }
     
     try {
-        // Reseta as variáveis
         allActivities = [];
         currentPage = 1;
         hasMorePages = true;
         
-        // Limpa a grid
         if (activitiesGrid) {
-            activitiesGrid.innerHTML = '<p>Carregando atividades...</p>';
+            activitiesGrid.innerHTML = `<p>${window.t('activities.loading', 'Carregando atividades...')}</p>`;
         }
         
-        // Carrega a primeira página
         await loadActivitiesPage(1);
         
-        showMessage(result, '✅ Lista de atividades atualizada', 'success');
+        showMessage(result, window.t('messages.success', '✅ Lista de atividades atualizada'), 'success');
         
     } catch (error) {
         console.error('❌ Erro ao atualizar atividades:', error);
-        showMessage(result, `Erro ao atualizar: ${error.message}`, 'error');
+        showMessage(result, window.t('errors.loadFailed', 'Erro ao atualizar') + `: ${error.message}`, 'error');
     } finally {
-        // Reabilita o botão
         if (refreshActivitiesBtn) {
             refreshActivitiesBtn.disabled = false;
-            refreshActivitiesBtn.innerHTML = '🔄 Atualizar Lista';
+            refreshActivitiesBtn.innerHTML = `🔄 ${window.t('activities.refresh', 'Atualizar Lista')}`;
         }
     }
 }
