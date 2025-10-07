@@ -1,3 +1,5 @@
 .env
+*.deb
+*.rpm
 build/bin/
 internal/config/credentials.go
