@@ -17,11 +17,18 @@ import (
 
 // Generator cria imagens de overlay.
 type Generator struct {
-	width, height   int
-	tempDir         string
-	fontLoaded      bool
-	fontPath        string
-	overlayPosition string
+	width, height    int
+	tempDir          string
+	fontLoaded       bool
+	fontPath         string
+	overlayPosition  string
+	progressCallback ProgressCallback
+}
+
+type ProgressCallback func(current, total int)
+
+func (g *Generator) SetProgressCallback(callback ProgressCallback) {
+	g.progressCallback = callback
 }
 
 func NewGeneratorWithPosition(position string) *Generator {
@@ -92,7 +99,6 @@ func (g *Generator) loadFont(dc *gg.Context, size float64) {
 	}
 }
 
-// GenerateOverlaySequence cria uma sequência de imagens PNG para o overlay.
 func (g *Generator) GenerateOverlaySequence(points []gps.GPSPoint, frameRate float64) ([]string, error) {
 	if len(points) == 0 {
 		return nil, fmt.Errorf("nenhum ponto GPS fornecido")
@@ -111,7 +117,14 @@ func (g *Generator) GenerateOverlaySequence(points []gps.GPSPoint, frameRate flo
 	}
 
 	var imagePaths []string
+	totalPoints := len(points)
+
 	for i, point := range points {
+		// Reporta progresso
+		if g.progressCallback != nil {
+			g.progressCallback(i+1, totalPoints)
+		}
+
 		imagePath := filepath.Join(g.tempDir, fmt.Sprintf("overlay_%06d.png", i))
 		err := g.generateEnhancedOverlay(point, maxSpeedScale, imagePath)
 		if err != nil {

@@ -68,6 +68,17 @@
     },
     "process": "Procesar con Overlay",
     "processing": "Procesando...",
+    "stages": {
+      "init": "Inicializando",
+      "metadata": "Obteniendo metadatos",
+      "activity": "Cargando actividad",
+      "sync": "Sincronizando tiempo",
+      "gps": "Procesando datos GPS",
+      "overlay": "Generando overlays",
+      "output": "Preparando salida",
+      "encoding": "Codificando video",
+      "complete": "Completado"
+    },
     "messages": {
       "autoSync": "¡Punto de inicio automático encontrado!",
       "manualSync": "Haga clic en el mapa para configurar manualmente",
@@ -105,15 +116,17 @@
       "medium": "Moderado (15-25 km/h)",
       "fast": "Rápido (25-40 km/h)",
       "veryFast": "Muy rápido (40+ km/h)"
+    },
+    "messages": {
+      "basicTrajectory": "Trayectoria básica cargada (datos GPS limitados)",
+      "searching": "Buscando punto GPS más cercano..."
     }
   },
   "messages": {
     "success": "Éxito",
     "error": "Error",
     "warning": "Advertencia",
-    "info": "Información",
-    "basicTrajectory": "Trayectoria básica cargada (datos GPS limitados)",
-    "searching": "Buscando punto GPS más cercano..."
+    "info": "Información"
   },
   "errors": {
     "selectActivityFirst": "Seleccione una actividad y un video primero",

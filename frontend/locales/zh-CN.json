@@ -68,6 +68,17 @@
     },
     "process": "使用叠加处理",
     "processing": "处理中...",
+    "stages": {
+      "init": "初始化",
+      "metadata": "获取元数据",
+      "activity": "加载活动",
+      "sync": "同步时间",
+      "gps": "处理GPS数据",
+      "overlay": "生成叠加",
+      "output": "准备输出",
+      "encoding": "编码视频",
+      "complete": "完成"
+    },
     "messages": {
       "autoSync": "已找到自动起始点！",
       "manualSync": "点击地图手动设置",
@@ -83,18 +94,13 @@
     "provider": "地图提供商",
     "current": "当前",
     "available": "可用提供商",
+    "gpsPoints": "GPS点",
     "categories": {
       "sports": "运动",
       "satellite": "卫星",
       "streets": "街道与导航",
       "dark": "深色模式",
       "terrain": "地形"
-    },
-    "overlayPosition": {
-      "topLeft": "左上角",
-      "topRight": "右上角",
-      "bottomLeft": "左下角",
-      "bottomRight": "右下角"
     },
     "markers": {
       "start": "活动开始",
@@ -103,22 +109,24 @@
       "autoStart": "自动开始（点击轨迹调整）"
     },
     "speedLegend": {
-      "title": "🏃 速度",
+      "title": "速度",
       "stopped": "停止 (0-3 km/h)",
       "verySlow": "很慢 (3-8 km/h)",
       "slow": "慢 (8-15 km/h)",
       "medium": "中等 (15-25 km/h)",
       "fast": "快 (25-40 km/h)",
       "veryFast": "很快 (40+ km/h)"
+    },
+    "messages": {
+      "basicTrajectory": "基本轨迹已加载（GPS数据有限）",
+      "searching": "搜索最近的GPS点..."
     }
   },
   "messages": {
     "success": "成功",
     "error": "错误",
     "warning": "警告",
-    "info": "信息",
-    "basicTrajectory": "基本轨迹已加载（GPS数据有限）",
-    "searching": "搜索最近的GPS点..."
+    "info": "信息"
   },
   "errors": {
     "selectActivityFirst": "请先选择活动和视频",

@@ -1,17 +1,29 @@
 package video
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
-type Processor struct{}
+type Processor struct {
+	progressCallback func(progress float64)
+}
+
+type ProgressCallback func(progress float64)
 
 func NewProcessor() *Processor {
 	return &Processor{}
+}
+
+func (p *Processor) SetProgressCallback(callback ProgressCallback) {
+	p.progressCallback = callback
 }
 
 func (p *Processor) ApplyOverlaysWithPosition(inputVideo string, overlayImages []string, outputPath string, position string) error {
@@ -27,7 +39,6 @@ func (p *Processor) ApplyOverlaysWithPosition(inputVideo string, overlayImages [
 	tempDir := filepath.Dir(overlayImages[0])
 	listFile := filepath.Join(tempDir, "overlay_list.txt")
 
-	// Calcula a duração de cada imagem de overlay com base na duração total do vídeo e no número de pontos GPS
 	totalDuration := metadata.Duration.Seconds()
 	durationPerImage := totalDuration / float64(len(overlayImages))
 
@@ -43,7 +54,6 @@ func (p *Processor) ApplyOverlaysWithPosition(inputVideo string, overlayImages [
 		overlayX, overlayY,
 	)
 
-	// Comando FFmpeg para aplicar a sequência de imagens como um overlay
 	cmd := exec.Command("ffmpeg",
 		"-i", inputVideo,
 		"-f", "concat",
@@ -55,26 +65,76 @@ func (p *Processor) ApplyOverlaysWithPosition(inputVideo string, overlayImages [
 		"-c:v", "libx264",
 		"-preset", "fast",
 		"-crf", "18",
+		"-progress", "pipe:1",
 		"-y",
 		outputPath,
 	)
 
-	fmt.Printf("DEBUG: Aplicando %d overlays ao vídeo\n", len(overlayImages))
-	fmt.Printf("DEBUG: Comando FFmpeg: %s\n", cmd.String())
-
-	output, err := cmd.CombinedOutput()
+	// Captura stdout e stderr
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		// Fornece uma mensagem de erro detalhada incluindo a saída do ffmpeg
-		return fmt.Errorf("o comando ffmpeg falhou: %s\nSaída do FFmpeg: %s", err, string(output))
+		return fmt.Errorf("erro ao criar pipe stdout: %w", err)
 	}
 
-	// É uma boa prática remover o arquivo de lista temporário
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("erro ao criar pipe stderr: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("erro ao iniciar ffmpeg: %w", err)
+	}
+
+	// Monitora progresso do FFmpeg (corrigido: passa io.Reader)
+	go p.monitorFFmpegProgress(stdout, totalDuration)
+
+	// Captura erros
+	var stderrOutput strings.Builder
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			stderrOutput.WriteString(scanner.Text() + "\n")
+		}
+	}()
+
+	// Aguarda conclusão
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("ffmpeg falhou: %s\nOutput: %s", err, stderrOutput.String())
+	}
+
 	os.Remove(listFile)
 	return nil
 }
 
+// monitorFFmpegProgress monitora o progresso do FFmpeg em tempo real
+// Corrigido: recebe io.Reader em vez de *bufio.Scanner
+func (p *Processor) monitorFFmpegProgress(reader io.Reader, totalDuration float64) {
+	timeRegex := regexp.MustCompile(`out_time_ms=(\d+)`)
+
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if matches := timeRegex.FindStringSubmatch(line); len(matches) > 1 {
+			timeMicros, err := strconv.ParseFloat(matches[1], 64)
+			if err == nil {
+				currentSeconds := timeMicros / 1000000.0
+				progress := (currentSeconds / totalDuration) * 100
+
+				if progress > 100 {
+					progress = 100
+				}
+
+				if p.progressCallback != nil {
+					p.progressCallback(progress)
+				}
+			}
+		}
+	}
+}
+
 func (p *Processor) calculateOverlayCoordinates(position string) (string, string) {
-	margin := "10" // margem em pixels
+	margin := "10"
 
 	switch position {
 	case "top-left":
@@ -86,32 +146,24 @@ func (p *Processor) calculateOverlayCoordinates(position string) (string, string
 	case "bottom-right":
 		return fmt.Sprintf("main_w-overlay_w-%s", margin), fmt.Sprintf("main_h-overlay_h-%s", margin)
 	default:
-		// Padrão: bottom-left
 		return margin, fmt.Sprintf("main_h-overlay_h-%s", margin)
 	}
 }
 
-// createImageListWithDuration cria um arquivo de texto para o demuxer concat do ffmpeg.
-// A cada imagem é atribuída uma duração específica.
 func (p *Processor) createImageListWithDuration(images []string, listFile string, duration float64) error {
 	var content strings.Builder
-
-	// Este formato é exigido pelo demuxer concat
 	content.WriteString("ffconcat version 1.0\n")
 
 	for _, img := range images {
-		// Usa caminhos absolutos para segurança
 		absPath, err := filepath.Abs(img)
 		if err != nil {
 			return err
 		}
-		// Escapa barras invertidas para caminhos do Windows
 		safePath := strings.ReplaceAll(absPath, `\`, `\\`)
 		content.WriteString(fmt.Sprintf("file '%s'\n", safePath))
 		content.WriteString(fmt.Sprintf("duration %.6f\n", duration))
 	}
 
-	// A última imagem precisa ser especificada novamente sem duração para finalizar a sequência corretamente.
 	if len(images) > 0 {
 		absPath, err := filepath.Abs(images[len(images)-1])
 		if err != nil {

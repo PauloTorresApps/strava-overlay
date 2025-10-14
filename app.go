@@ -13,25 +13,21 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// App struct - Estrutura principal simplificada
 type App struct {
 	ctx          context.Context
 	stravaAuth   *auth.StravaAuth
 	stravaClient *strava.Client
 
-	// Handlers - Responsáveis pela lógica de negócio específica
 	authHandler     *handlers.AuthHandler
 	activityHandler *handlers.ActivityHandler
 	videoHandler    *handlers.VideoHandler
 	gpsHandler      *handlers.GPSHandler
-	configHandler   *handlers.ConfigHandler // NOVO: Handler de configuração
+	configHandler   *handlers.ConfigHandler
 
-	// Services - Responsáveis por operações complexas
 	videoService *services.VideoService
 	gpsService   *services.GPSService
 }
 
-// NewApp creates a new App application struct
 func NewApp() *App {
 	clientID := config.STRAVA_CLIENT_ID
 	clientSecret := config.STRAVA_CLIENT_SECRET
@@ -42,7 +38,6 @@ func NewApp() *App {
 
 	stravaAuth := auth.NewStravaAuth(clientID, clientSecret)
 
-	// Inicializa os services
 	videoService := services.NewVideoService()
 	gpsService := services.NewGPSService()
 
@@ -52,22 +47,28 @@ func NewApp() *App {
 		gpsService:   gpsService,
 	}
 
-	// Inicializa os handlers passando as dependências necessárias
 	app.authHandler = handlers.NewAuthHandler(stravaAuth, app.setStravaClient)
 	app.activityHandler = handlers.NewActivityHandler(app.getStravaClient)
 	app.videoHandler = handlers.NewVideoHandler(app.getStravaClient, videoService, gpsService)
 	app.gpsHandler = handlers.NewGPSHandler(app.getStravaClient, gpsService)
-	app.configHandler = handlers.NewConfigHandler() // NOVO: Inicializa config handler
+	app.configHandler = handlers.NewConfigHandler()
 
 	return app
 }
 
-// Startup is called when the app starts up
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// Define callback de progresso para o VideoService
+	a.videoService.SetProgressCallback(func(stage string, progress float64, message string) {
+		runtime.EventsEmit(ctx, "video:progress", map[string]interface{}{
+			"stage":    stage,
+			"progress": progress,
+			"message":  message,
+		})
+	})
 }
 
-// Helper methods para gerenciar o cliente Strava
 func (a *App) setStravaClient(client *strava.Client) {
 	a.stravaClient = client
 }
@@ -76,7 +77,6 @@ func (a *App) getStravaClient() *strava.Client {
 	return a.stravaClient
 }
 
-// Seletor de arquivos - permanece aqui por ser específico do Wails
 func (a *App) SelectVideoFile() (string, error) {
 	return runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title:   "Selecione um arquivo de vídeo",
@@ -84,26 +84,20 @@ func (a *App) SelectVideoFile() (string, error) {
 	})
 }
 
-// === NOVOS MÉTODOS DE CONFIGURAÇÃO ===
-
-// GetFrontendConfig retorna configurações seguras para o frontend
+// === Métodos de configuração ===
 func (a *App) GetFrontendConfig() *handlers.FrontendConfig {
 	return a.configHandler.GetFrontendConfig()
 }
 
-// GetSecureAPIKeys retorna chaves de API seguras para o frontend
 func (a *App) GetSecureAPIKeys() map[string]string {
 	return a.configHandler.GetSecureAPIKeys()
 }
 
-// GetMapProviderConfig retorna configuração de provedores de mapa
 func (a *App) GetMapProviderConfig() map[string]interface{} {
 	return a.configHandler.GetMapProviderConfig()
 }
 
-// === MÉTODOS QUE DELEGAM PARA OS HANDLERS ===
-
-// Auth methods
+// === Métodos delegados ===
 func (a *App) CheckAuthenticationStatus() handlers.AuthStatus {
 	return a.authHandler.CheckAuthenticationStatus(a.ctx)
 }
@@ -112,7 +106,6 @@ func (a *App) AuthenticateStrava() error {
 	return a.authHandler.AuthenticateStrava(a.ctx)
 }
 
-// Activity methods
 func (a *App) GetActivitiesPage(page int) (*handlers.PaginatedActivities, error) {
 	return a.activityHandler.GetActivitiesPage(page)
 }
@@ -125,7 +118,6 @@ func (a *App) GetActivityDetail(activityID int64) (*strava.ActivityDetail, error
 	return a.activityHandler.GetActivityDetail(activityID)
 }
 
-// GPS methods
 func (a *App) GetGPSPointForVideoTime(activityID int64, videoPath string) (handlers.FrontendGPSPoint, error) {
 	return a.gpsHandler.GetGPSPointForVideoTime(activityID, videoPath)
 }
@@ -146,7 +138,6 @@ func (a *App) GetGPSPointsWithDensity(activityID int64, density string) ([]handl
 	return a.gpsHandler.GetGPSPointsWithDensity(activityID, density)
 }
 
-// Video methods
 func (a *App) ProcessVideoOverlay(activityID int64, videoPath string, manualStartTimeStr string, overlayPosition string) (string, error) {
 	return a.videoHandler.ProcessVideoOverlay(activityID, videoPath, manualStartTimeStr, overlayPosition)
 }

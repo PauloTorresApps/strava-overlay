@@ -27,18 +27,11 @@ function updateProgress(value) {
 }
 
 /**
- * Simula um progresso para feedback visual durante o processamento.
+ * NÃO usar mais simulateProgress - agora temos progresso real!
+ * Mantida apenas para compatibilidade, mas não deve ser chamada.
  */
 function simulateProgress() {
-    let currentProgress = 0;
-    const interval = setInterval(() => {
-        currentProgress += Math.random() * 15;
-        if (currentProgress > 90) {
-            currentProgress = 90;
-            clearInterval(interval);
-        }
-        updateProgress(currentProgress);
-    }, 800);
+    console.warn('⚠️ simulateProgress() está deprecated - usando progresso real agora');
 }
 
 /**
@@ -55,5 +48,15 @@ function updateLoadMoreButton(isLoading) {
         loadMoreBtn.textContent = hasMorePages 
             ? window.t('activities.loadMore', 'Carregar Mais Atividades') 
             : window.t('activities.allLoaded', 'Todas as atividades foram carregadas');
+    }
+}
+
+/**
+ * Limpa mensagem de progresso detalhado
+ */
+function clearProgressMessage() {
+    const messageDiv = document.getElementById('progressMessage');
+    if (messageDiv) {
+        messageDiv.remove();
     }
 }

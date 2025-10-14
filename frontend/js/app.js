@@ -307,9 +307,19 @@ function showConfigInfo() {
     }
 }
 
-// Ponto de Entrada
+/**
+ * Configura listeners para eventos de progresso
+ */
+function setupProgressListeners() {
+    // O listener já está configurado em processVideo()
+    // mas podemos adicionar logs globais aqui se necessário
+    console.log('✅ Sistema de progresso em tempo real configurado');
+}
+
+// Chamar após initApp
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
+    setupProgressListeners();
     setTimeout(setupMapVisibilityObserver, 1000);
     setTimeout(showConfigInfo, 2000);
 });

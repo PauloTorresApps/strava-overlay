@@ -67,6 +67,17 @@
     },
     "process": "Processar com Overlay",
     "processing": "Processando...",
+    "stages": {
+      "init": "Inicializando",
+      "metadata": "Obtendo metadados",
+      "activity": "Carregando atividade",
+      "sync": "Sincronizando tempo",
+      "gps": "Processando dados GPS",
+      "overlay": "Gerando overlays",
+      "output": "Preparando saída",
+      "encoding": "Codificando vídeo",
+      "complete": "Concluído"
+    },
     "messages": {
       "autoSync": "Ponto de início automático encontrado!",
       "manualSync": "Clique no mapa para definir manualmente",

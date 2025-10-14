@@ -1,5 +1,17 @@
 console.log('📹 video.js carregando...');
 
+let progressStages = {
+    'init': { label: 'Inicializando', icon: '⚙️' },
+    'metadata': { label: 'Metadados', icon: '📄' },
+    'activity': { label: 'Atividade', icon: '🚴' },
+    'sync': { label: 'Sincronização', icon: '🔄' },
+    'gps': { label: 'Dados GPS', icon: '📍' },
+    'overlay': { label: 'Gerando Overlays', icon: '🎨' },
+    'output': { label: 'Preparando Saída', icon: '💾' },
+    'encoding': { label: 'Codificando Vídeo', icon: '🎬' },
+    'complete': { label: 'Concluído', icon: '✅' }
+};
+
 /**
  * Abre o seletor de arquivos de vídeo e busca o ponto de início automático.
  */
@@ -9,7 +21,7 @@ async function selectVideo() {
         if (!path) return;
 
         selectedVideoPath = path;
-        manualSyncTime = ""; // Reseta ao selecionar novo vídeo
+        manualSyncTime = "";
 
         const fileName = path.split(/[\\/]/).pop();
         if (videoInfo) {
@@ -17,7 +29,6 @@ async function selectVideo() {
         }
         if (processBtn) processBtn.disabled = false;
 
-        // NOVO: Mostra o controle de posição do overlay
         if (window.overlayPosition) {
             window.overlayPosition.show();
         }
@@ -35,6 +46,7 @@ async function selectVideo() {
         showMessage(result, `Erro ao selecionar vídeo: ${error}`, 'error');
     }
 }
+
 /**
  * Envia a atividade e o vídeo para o backend para processamento do overlay.
  */
@@ -49,27 +61,34 @@ async function processVideo() {
             processBtn.disabled = true;
             processBtn.textContent = 'Processando...';
         }
-        if (progress) progress.classList.remove('hidden');
         
-        showMessage(result, '', ''); // Limpa mensagens anteriores
-        simulateProgress();
+        // Mostra barra de progresso
+        if (progress) progress.classList.remove('hidden');
+        updateProgress(0);
+        showMessage(result, '', '');
 
-        // NOVO: Pega a posição selecionada do overlay
+        // Escuta eventos de progresso
+        const unsubscribe = window.runtime.EventsOn('video:progress', (data) => {
+            console.log('📊 Progresso:', data);
+            updateDetailedProgress(data.stage, data.progress, data.message);
+        });
+
         const overlayPosition = window.overlayPosition ? window.overlayPosition.getPosition() : 'bottom-left';
         console.log(`📍 Processando vídeo com overlay na posição: ${overlayPosition}`);
 
-        // MODIFICADO: Passa a posição do overlay como 4º parâmetro
         const outputPath = await window.go.main.App.ProcessVideoOverlay(
             selectedActivity.id, 
             selectedVideoPath, 
             manualSyncTime,
-            overlayPosition // NOVO parâmetro
+            overlayPosition
         );
+        
+        // Remove listener de eventos
+        unsubscribe();
         
         updateProgress(100);
         showMessage(result, `Vídeo processado com sucesso!<br><strong>Local:</strong> ${outputPath}`, 'success');
         
-        // NOVO: Esconde o controle após processamento bem-sucedido
         if (window.overlayPosition) {
             window.overlayPosition.hide();
         }
@@ -85,5 +104,46 @@ async function processVideo() {
             if (progress) progress.classList.add('hidden');
             updateProgress(0);
         }, 5000);
+    }
+}
+
+/**
+ * Atualiza a barra de progresso com detalhes do estágio atual
+ */
+function updateDetailedProgress(stage, progressValue, message) {
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    
+    if (progressBar) {
+        progressBar.style.width = `${progressValue}%`;
+    }
+    
+    if (progressText) {
+        const stageInfo = progressStages[stage] || { label: stage, icon: '⚙️' };
+        progressText.textContent = `${stageInfo.icon} ${stageInfo.label}: ${Math.round(progressValue)}%`;
+    }
+    
+    // Atualiza mensagem detalhada
+    if (message) {
+        const progressContainer = document.getElementById('progress');
+        let messageDiv = document.getElementById('progressMessage');
+        
+        if (!messageDiv) {
+            messageDiv = document.createElement('div');
+            messageDiv.id = 'progressMessage';
+            messageDiv.style.cssText = `
+                margin-top: 10px;
+                padding: 8px 12px;
+                background: var(--info-bg);
+                border: 1px solid var(--info-border);
+                border-radius: 4px;
+                color: var(--info-text);
+                font-size: 0.9rem;
+                text-align: center;
+            `;
+            progressContainer.appendChild(messageDiv);
+        }
+        
+        messageDiv.textContent = message;
     }
 }
