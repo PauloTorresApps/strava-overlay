@@ -59,6 +59,9 @@
     "title": "Process Video with Overlay",
     "selectVideo": "Select Video",
     "selectedVideo": "Selected Video",
+    "cancelButton": "Cancel Processing",
+    "cancelConfirm": "Do you really want to cancel processing?",
+    "cancelled": "Processing cancelled by user",
     "overlayPosition": {
       "title": "Overlay Position",
       "topLeft": "Top Left Corner",

@@ -5,6 +5,8 @@ import {strava} from '../models';
 
 export function AuthenticateStrava():Promise<void>;
 
+export function CancelVideoProcessing():Promise<void>;
+
 export function CheckAuthenticationStatus():Promise<handlers.AuthStatus>;
 
 export function GetActivities():Promise<Array<handlers.FrontendActivity>>;

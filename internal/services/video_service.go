@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -41,6 +42,7 @@ func (s *VideoService) reportProgress(stage string, progress float64, message st
 
 // ProcessVideoWithOverlay processa um vídeo aplicando overlay com dados GPS
 func (s *VideoService) ProcessVideoWithOverlay(
+	ctx context.Context,
 	client *strava.Client,
 	activityID int64,
 	videoPath string,
@@ -50,7 +52,11 @@ func (s *VideoService) ProcessVideoWithOverlay(
 ) (string, error) {
 	s.reportProgress("init", 0, "Iniciando processamento...")
 
-	// 1. Obter metadados do vídeo (5%)
+	// Verifica cancelamento em cada etapa
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
 	s.reportProgress("metadata", 5, "Obtendo metadados do vídeo...")
 	videoMeta, err := video.GetVideoMetadata(videoPath)
 	if err != nil {
@@ -59,7 +65,10 @@ func (s *VideoService) ProcessVideoWithOverlay(
 	s.reportProgress("metadata", 10, fmt.Sprintf("Vídeo: %.1fs, %dx%d",
 		videoMeta.Duration.Seconds(), videoMeta.Width, videoMeta.Height))
 
-	// 2. Obter detalhes da atividade (15%)
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
 	s.reportProgress("activity", 15, "Carregando atividade do Strava...")
 	detail, err := client.GetActivityDetail(activityID)
 	if err != nil {
@@ -67,7 +76,10 @@ func (s *VideoService) ProcessVideoWithOverlay(
 	}
 	s.reportProgress("activity", 20, fmt.Sprintf("Atividade: %s", detail.Name))
 
-	// 3. Determinar tempo de início (25%)
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
 	s.reportProgress("sync", 25, "Sincronizando tempo GPS-vídeo...")
 	correctedVideoStartTime, err := s.determineVideoStartTime(videoMeta, detail, manualStartTimeStr)
 	if err != nil {
@@ -75,7 +87,10 @@ func (s *VideoService) ProcessVideoWithOverlay(
 	}
 	s.reportProgress("sync", 30, "Sincronização concluída")
 
-	// 4. Obter pontos GPS (40%)
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
 	s.reportProgress("gps", 35, "Carregando dados GPS...")
 	correctedVideoEndTime := correctedVideoStartTime.Add(videoMeta.Duration)
 	gpsPoints, err := gpsService.GetPointsForTimeRange(client, activityID, correctedVideoStartTime, correctedVideoEndTime)
@@ -87,14 +102,18 @@ func (s *VideoService) ProcessVideoWithOverlay(
 	}
 	s.reportProgress("gps", 40, fmt.Sprintf("%d pontos GPS carregados", len(gpsPoints)))
 
-	// 5. Gerar sequência de overlays (60%)
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+
 	s.reportProgress("overlay", 45, "Gerando overlays...")
 	overlayGen := overlay.NewGeneratorWithPosition(overlayPosition)
 	defer overlayGen.Cleanup()
 
-	// Criar callback de progresso para geração de overlays
-	// totalOverlays := len(gpsPoints)
 	overlayGen.SetProgressCallback(func(current, total int) {
+		if ctx.Err() != nil {
+			return
+		}
 		progress := 45 + (15 * float64(current) / float64(total))
 		s.reportProgress("overlay", progress, fmt.Sprintf("Gerando overlay %d/%d", current, total))
 	})
@@ -105,7 +124,11 @@ func (s *VideoService) ProcessVideoWithOverlay(
 	}
 	s.reportProgress("overlay", 60, fmt.Sprintf("%d overlays gerados", len(overlayImages)))
 
-	// 6. Definir caminho de saída (65%)
+	if ctx.Err() != nil {
+		overlayGen.Cleanup()
+		return "", ctx.Err()
+	}
+
 	s.reportProgress("output", 65, "Preparando arquivo de saída...")
 	outputPath, err := s.generateOutputPath(activityID)
 	if err != nil {
@@ -113,17 +136,15 @@ func (s *VideoService) ProcessVideoWithOverlay(
 	}
 	s.reportProgress("output", 70, "Caminho definido")
 
-	// 7. Aplicar overlays ao vídeo (70-95%)
 	s.reportProgress("encoding", 70, "Iniciando codificação do vídeo...")
 	videoProcessor := video.NewProcessor()
 
-	// Passa callback de progresso para o processor
 	videoProcessor.SetProgressCallback(func(progress float64) {
 		encodingProgress := 70 + (25 * progress / 100)
 		s.reportProgress("encoding", encodingProgress, fmt.Sprintf("Codificando: %.1f%%", progress))
 	})
 
-	err = videoProcessor.ApplyOverlaysWithPosition(videoPath, overlayImages, outputPath, overlayPosition)
+	err = videoProcessor.ApplyOverlaysWithPosition(ctx, videoPath, overlayImages, outputPath, overlayPosition)
 	if err != nil {
 		return "", fmt.Errorf("failed to apply overlays: %w", err)
 	}

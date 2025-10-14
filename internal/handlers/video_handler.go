@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -39,7 +40,6 @@ func (h *VideoHandler) ProcessVideoOverlay(activityID int64, videoPath string, m
 
 	log.Printf("🎬 Iniciando processamento de vídeo para atividade %d com overlay na posição %s", activityID, overlayPosition)
 
-	// Valida a posição
 	validPositions := map[string]bool{
 		"top-left":     true,
 		"top-right":    true,
@@ -48,16 +48,17 @@ func (h *VideoHandler) ProcessVideoOverlay(activityID int64, videoPath string, m
 	}
 
 	if !validPositions[overlayPosition] {
-		overlayPosition = "bottom-left" // Fallback para padrão
+		overlayPosition = "bottom-left"
 	}
 
-	// Processa o vídeo usando o serviço especializado
+	// CORREÇÃO: Adicionar context.Background() como primeiro parâmetro
 	outputPath, err := h.videoService.ProcessVideoWithOverlay(
+		context.Background(), // ADICIONE ESTA LINHA
 		client,
 		activityID,
 		videoPath,
 		manualStartTimeStr,
-		overlayPosition, // Novo parâmetro
+		overlayPosition,
 		h.gpsService,
 	)
 
@@ -66,7 +67,6 @@ func (h *VideoHandler) ProcessVideoOverlay(activityID int64, videoPath string, m
 		return "", err
 	}
 
-	// Garante que o diretório de saída existe e retorna o caminho completo
 	homeDir, _ := os.UserHomeDir()
 	outputDir := filepath.Join(homeDir, "Strava Add Overlay")
 	fullOutputPath := filepath.Join(outputDir, filepath.Base(outputPath))

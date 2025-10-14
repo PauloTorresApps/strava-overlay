@@ -12,9 +12,9 @@ let progressStages = {
     'complete': { label: 'Concluído', icon: '✅' }
 };
 
-/**
- * Abre o seletor de arquivos de vídeo e busca o ponto de início automático.
- */
+let isProcessing = false;
+let progressUnsubscribe = null;
+
 async function selectVideo() {
     try {
         const path = await window.go.main.App.SelectVideoFile();
@@ -47,9 +47,6 @@ async function selectVideo() {
     }
 }
 
-/**
- * Envia a atividade e o vídeo para o backend para processamento do overlay.
- */
 async function processVideo() {
     if (!selectedActivity || !selectedVideoPath) {
         showMessage(result, 'Selecione uma atividade e um vídeo primeiro.', 'error');
@@ -57,18 +54,22 @@ async function processVideo() {
     }
 
     try {
+        isProcessing = true;
+        
+        // Atualiza botões
         if (processBtn) {
             processBtn.disabled = true;
-            processBtn.textContent = 'Processando...';
+            processBtn.style.display = 'none';
         }
         
-        // Mostra barra de progresso
+        showCancelButton();
+        
         if (progress) progress.classList.remove('hidden');
         updateProgress(0);
         showMessage(result, '', '');
 
         // Escuta eventos de progresso
-        const unsubscribe = window.runtime.EventsOn('video:progress', (data) => {
+        progressUnsubscribe = window.runtime.EventsOn('video:progress', (data) => {
             console.log('📊 Progresso:', data);
             updateDetailedProgress(data.stage, data.progress, data.message);
         });
@@ -83,8 +84,10 @@ async function processVideo() {
             overlayPosition
         );
         
-        // Remove listener de eventos
-        unsubscribe();
+        if (progressUnsubscribe) {
+            progressUnsubscribe();
+            progressUnsubscribe = null;
+        }
         
         updateProgress(100);
         showMessage(result, `Vídeo processado com sucesso!<br><strong>Local:</strong> ${outputPath}`, 'success');
@@ -93,23 +96,77 @@ async function processVideo() {
             window.overlayPosition.hide();
         }
     } catch (error) {
+        if (progressUnsubscribe) {
+            progressUnsubscribe();
+            progressUnsubscribe = null;
+        }
+        
+        const errorMsg = error.toString();
+        if (errorMsg.includes('cancelado')) {
+            showMessage(result, '⚠️ Processamento cancelado pelo usuário', 'info');
+        } else {
+            showMessage(result, `Erro no processamento: ${error}`, 'error');
+        }
         updateProgress(0);
-        showMessage(result, `Erro no processamento: ${error}`, 'error');
     } finally {
+        isProcessing = false;
+        hideCancelButton();
+        
         if (processBtn) {
             processBtn.disabled = false;
+            processBtn.style.display = 'inline-block';
             processBtn.textContent = 'Processar com Overlay';
         }
+        
         setTimeout(() => {
             if (progress) progress.classList.add('hidden');
+            clearProgressMessage();
             updateProgress(0);
         }, 5000);
     }
 }
 
-/**
- * Atualiza a barra de progresso com detalhes do estágio atual
- */
+async function cancelProcessing() {
+    if (!isProcessing) return;
+    
+    try {
+        const confirmed = confirm('Deseja realmente cancelar o processamento?');
+        if (!confirmed) return;
+        
+        await window.go.main.App.CancelVideoProcessing();
+        console.log('🛑 Cancelamento solicitado');
+    } catch (error) {
+        console.error('Erro ao cancelar:', error);
+        showMessage(result, `Erro ao cancelar: ${error}`, 'error');
+    }
+}
+
+function showCancelButton() {
+    let cancelBtn = document.getElementById('cancelProcessBtn');
+    
+    if (!cancelBtn) {
+        cancelBtn = document.createElement('button');
+        cancelBtn.id = 'cancelProcessBtn';
+        cancelBtn.textContent = '🛑 Cancelar Processamento';
+        cancelBtn.style.cssText = `
+            background-color: #dc3545;
+            margin-left: 10px;
+        `;
+        cancelBtn.onclick = cancelProcessing;
+        
+        processBtn.parentNode.insertBefore(cancelBtn, processBtn.nextSibling);
+    }
+    
+    cancelBtn.style.display = 'inline-block';
+}
+
+function hideCancelButton() {
+    const cancelBtn = document.getElementById('cancelProcessBtn');
+    if (cancelBtn) {
+        cancelBtn.style.display = 'none';
+    }
+}
+
 function updateDetailedProgress(stage, progressValue, message) {
     const progressBar = document.getElementById('progressBar');
     const progressText = document.getElementById('progressText');
@@ -123,7 +180,6 @@ function updateDetailedProgress(stage, progressValue, message) {
         progressText.textContent = `${stageInfo.icon} ${stageInfo.label}: ${Math.round(progressValue)}%`;
     }
     
-    // Atualiza mensagem detalhada
     if (message) {
         const progressContainer = document.getElementById('progress');
         let messageDiv = document.getElementById('progressMessage');

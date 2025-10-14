@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"sync"
 
 	"strava-overlay/internal/auth"
 	"strava-overlay/internal/config"
@@ -26,6 +28,9 @@ type App struct {
 
 	videoService *services.VideoService
 	gpsService   *services.GPSService
+
+	processingCancel context.CancelFunc
+	processingMutex  sync.Mutex
 }
 
 func NewApp() *App {
@@ -67,6 +72,49 @@ func (a *App) Startup(ctx context.Context) {
 			"message":  message,
 		})
 	})
+}
+
+func (a *App) ProcessVideoOverlay(activityID int64, videoPath string, manualStartTimeStr string, overlayPosition string) (string, error) {
+	a.processingMutex.Lock()
+
+	// Cria contexto cancelável
+	ctx, cancel := context.WithCancel(a.ctx)
+	a.processingCancel = cancel
+	a.processingMutex.Unlock()
+
+	defer func() {
+		a.processingMutex.Lock()
+		a.processingCancel = nil
+		a.processingMutex.Unlock()
+	}()
+
+	client := a.getStravaClient()
+	if client == nil {
+		return "", fmt.Errorf("not authenticated")
+	}
+
+	return a.videoService.ProcessVideoWithOverlay(
+		ctx,
+		client,
+		activityID,
+		videoPath,
+		manualStartTimeStr,
+		overlayPosition,
+		a.gpsService,
+	)
+}
+
+func (a *App) CancelVideoProcessing() error {
+	a.processingMutex.Lock()
+	defer a.processingMutex.Unlock()
+
+	if a.processingCancel == nil {
+		return fmt.Errorf("nenhum processamento em andamento")
+	}
+
+	log.Println("🛑 Cancelando processamento de vídeo...")
+	a.processingCancel()
+	return nil
 }
 
 func (a *App) setStravaClient(client *strava.Client) {
@@ -136,8 +184,4 @@ func (a *App) GetFullGPSTrajectory(activityID int64) ([]handlers.FrontendGPSPoin
 
 func (a *App) GetGPSPointsWithDensity(activityID int64, density string) ([]handlers.FrontendGPSPoint, error) {
 	return a.gpsHandler.GetGPSPointsWithDensity(activityID, density)
-}
-
-func (a *App) ProcessVideoOverlay(activityID int64, videoPath string, manualStartTimeStr string, overlayPosition string) (string, error) {
-	return a.videoHandler.ProcessVideoOverlay(activityID, videoPath, manualStartTimeStr, overlayPosition)
 }

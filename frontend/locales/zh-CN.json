@@ -59,6 +59,9 @@
     "title": "使用叠加处理视频",
     "selectVideo": "选择视频",
     "selectedVideo": "已选择视频",
+    "cancelButton": "取消处理",
+    "cancelConfirm": "确定要取消处理吗？",
+    "cancelled": "用户已取消处理",
     "overlayPosition": {
       "title": "叠加位置",
       "topLeft": "左上角",

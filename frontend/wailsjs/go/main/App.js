@@ -6,6 +6,10 @@ export function AuthenticateStrava() {
   return window['go']['main']['App']['AuthenticateStrava']();
 }
 
+export function CancelVideoProcessing() {
+  return window['go']['main']['App']['CancelVideoProcessing']();
+}
+
 export function CheckAuthenticationStatus() {
   return window['go']['main']['App']['CheckAuthenticationStatus']();
 }

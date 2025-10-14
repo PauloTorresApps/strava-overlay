@@ -2,6 +2,7 @@ package video
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 type Processor struct {
 	progressCallback func(progress float64)
+	cmd              *exec.Cmd // Para cancelamento
 }
 
 type ProgressCallback func(progress float64)
@@ -26,7 +28,7 @@ func (p *Processor) SetProgressCallback(callback ProgressCallback) {
 	p.progressCallback = callback
 }
 
-func (p *Processor) ApplyOverlaysWithPosition(inputVideo string, overlayImages []string, outputPath string, position string) error {
+func (p *Processor) ApplyOverlaysWithPosition(ctx context.Context, inputVideo string, overlayImages []string, outputPath string, position string) error {
 	if len(overlayImages) == 0 {
 		return fmt.Errorf("nenhuma imagem de overlay fornecida")
 	}
@@ -54,7 +56,7 @@ func (p *Processor) ApplyOverlaysWithPosition(inputVideo string, overlayImages [
 		overlayX, overlayY,
 	)
 
-	cmd := exec.Command("ffmpeg",
+	p.cmd = exec.CommandContext(ctx, "ffmpeg",
 		"-i", inputVideo,
 		"-f", "concat",
 		"-safe", "0",
@@ -70,25 +72,22 @@ func (p *Processor) ApplyOverlaysWithPosition(inputVideo string, overlayImages [
 		outputPath,
 	)
 
-	// Captura stdout e stderr
-	stdout, err := cmd.StdoutPipe()
+	stdout, err := p.cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("erro ao criar pipe stdout: %w", err)
 	}
 
-	stderr, err := cmd.StderrPipe()
+	stderr, err := p.cmd.StderrPipe()
 	if err != nil {
 		return fmt.Errorf("erro ao criar pipe stderr: %w", err)
 	}
 
-	if err := cmd.Start(); err != nil {
+	if err := p.cmd.Start(); err != nil {
 		return fmt.Errorf("erro ao iniciar ffmpeg: %w", err)
 	}
 
-	// Monitora progresso do FFmpeg (corrigido: passa io.Reader)
 	go p.monitorFFmpegProgress(stdout, totalDuration)
 
-	// Captura erros
 	var stderrOutput strings.Builder
 	go func() {
 		scanner := bufio.NewScanner(stderr)
@@ -97,8 +96,12 @@ func (p *Processor) ApplyOverlaysWithPosition(inputVideo string, overlayImages [
 		}
 	}()
 
-	// Aguarda conclusão
-	if err := cmd.Wait(); err != nil {
+	if err := p.cmd.Wait(); err != nil {
+		// Verifica se foi cancelado
+		if ctx.Err() == context.Canceled {
+			os.Remove(outputPath) // Remove arquivo parcial
+			return fmt.Errorf("processamento cancelado pelo usuário")
+		}
 		return fmt.Errorf("ffmpeg falhou: %s\nOutput: %s", err, stderrOutput.String())
 	}
 
@@ -106,8 +109,6 @@ func (p *Processor) ApplyOverlaysWithPosition(inputVideo string, overlayImages [
 	return nil
 }
 
-// monitorFFmpegProgress monitora o progresso do FFmpeg em tempo real
-// Corrigido: recebe io.Reader em vez de *bufio.Scanner
 func (p *Processor) monitorFFmpegProgress(reader io.Reader, totalDuration float64) {
 	timeRegex := regexp.MustCompile(`out_time_ms=(\d+)`)
 
