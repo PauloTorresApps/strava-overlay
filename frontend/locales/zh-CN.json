@@ -142,5 +142,19 @@
     "loading": "加载配置中...",
     "loaded": "配置已加载",
     "default": "默认配置"
+  },
+  "notifications": {
+    "completed": {
+      "title": "✅ 视频已处理！",
+      "body": "您的视频已准备就绪"
+    },
+    "error": {
+      "title": "❌ 处理错误",
+      "body": "视频处理失败"
+    },
+    "cancelled": {
+      "title": "⚠️ 已取消",
+      "body": "用户已取消处理"
+    }
   }
 }

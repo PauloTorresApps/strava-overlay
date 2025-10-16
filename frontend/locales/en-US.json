@@ -142,5 +142,19 @@
     "loading": "Loading settings...",
     "loaded": "Settings loaded",
     "default": "Default settings"
+  },
+    "notifications": {
+    "completed": {
+      "title": "✅ Video Processed!",
+      "body": "Your video is ready"
+    },
+    "error": {
+      "title": "❌ Processing Error",
+      "body": "Failed to process video"
+    },
+    "cancelled": {
+      "title": "⚠️ Cancelled",
+      "body": "Processing cancelled by user"
+    }
   }
 }

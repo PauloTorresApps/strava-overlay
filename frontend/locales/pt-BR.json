@@ -136,5 +136,19 @@
     "loading": "Carregando configurações...",
     "loaded": "Configurações carregadas",
     "default": "Configurações padrão"
+  },
+  "notifications": {
+    "completed": {
+      "title": "✅ Vídeo Processado!",
+      "body": "Seu vídeo está pronto"
+    },
+    "error": {
+      "title": "❌ Erro no Processamento",
+      "body": "Falha ao processar o vídeo"
+    },
+    "cancelled": {
+      "title": "⚠️ Cancelado",
+      "body": "Processamento cancelado pelo usuário"
+    }
   }
 }
