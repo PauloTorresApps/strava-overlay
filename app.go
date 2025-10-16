@@ -72,6 +72,20 @@ func (a *App) Startup(ctx context.Context) {
 			"message":  message,
 		})
 	})
+
+	a.videoService.SetCompletionCallback(func(success bool, outputPath string, err error) {
+		if success {
+			runtime.EventsEmit(ctx, "video:completed", map[string]interface{}{
+				"success":    true,
+				"outputPath": outputPath,
+			})
+		} else {
+			runtime.EventsEmit(ctx, "video:completed", map[string]interface{}{
+				"success": false,
+				"error":   err.Error(),
+			})
+		}
+	})
 }
 
 func (a *App) ProcessVideoOverlay(activityID int64, videoPath string, manualStartTimeStr string, overlayPosition string) (string, error) {
