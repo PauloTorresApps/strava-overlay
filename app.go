@@ -185,3 +185,12 @@ func (a *App) GetFullGPSTrajectory(activityID int64) ([]handlers.FrontendGPSPoin
 func (a *App) GetGPSPointsWithDensity(activityID int64, density string) ([]handlers.FrontendGPSPoint, error) {
 	return a.gpsHandler.GetGPSPointsWithDensity(activityID, density)
 }
+
+// SendDesktopNotification envia notificação nativa
+func (a *App) SendDesktopNotification(title, body string) {
+	runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
+		Type:    runtime.InfoDialog,
+		Title:   title,
+		Message: body,
+	})
+}
