@@ -19,7 +19,12 @@ type ProgressCallback func(stage string, progress float64, message string)
 
 // VideoService encapsula toda a lógica complexa de processamento de vídeo
 type VideoService struct {
-	progressCallback ProgressCallback
+	progressCallback   ProgressCallback
+	completionCallback func(success bool, outputPath string, err error)
+}
+
+func (s *VideoService) SetCompletionCallback(callback func(success bool, outputPath string, err error)) {
+	s.completionCallback = callback
 }
 
 // NewVideoService cria um novo serviço de vídeo
@@ -146,7 +151,14 @@ func (s *VideoService) ProcessVideoWithOverlay(
 
 	err = videoProcessor.ApplyOverlaysWithPosition(ctx, videoPath, overlayImages, outputPath, overlayPosition)
 	if err != nil {
+		if s.completionCallback != nil {
+			s.completionCallback(false, "", err)
+		}
 		return "", fmt.Errorf("failed to apply overlays: %w", err)
+	}
+
+	if s.completionCallback != nil {
+		s.completionCallback(true, outputPath, nil)
 	}
 
 	s.reportProgress("complete", 100, "Processamento concluído!")
