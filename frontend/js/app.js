@@ -6,6 +6,15 @@ console.log('🚀 app.js carregando (versão com i18n)...');
 async function initApp() {
     console.log('🚀 Strava Add Overlay iniciando');
     
+    // Solicitar permissão de notificação logo ao iniciar
+    if ("Notification" in window && Notification.permission === "default") {
+        setTimeout(() => {
+            Notification.requestPermission().then(permission => {
+                console.log('🔔 Permissão de notificação:', permission);
+            });
+        }, 2000); // Aguarda 2s para não ser intrusivo
+    }
+
     // 1. PRIMEIRO: Inicializa i18n
     try {
         console.log('🌍 Inicializando sistema de internacionalização...');
