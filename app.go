@@ -208,3 +208,19 @@ func (a *App) SendDesktopNotification(title, body string) {
 		Message: body,
 	})
 }
+
+// SendNotification envia notificação do sistema operacional
+func (a *App) SendNotification(title, message string) {
+	go func() {
+		_, err := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
+			Type:          runtime.InfoDialog,
+			Title:         title,
+			Message:       message,
+			Buttons:       []string{"OK"},
+			DefaultButton: "OK",
+		})
+		if err != nil {
+			log.Printf("Erro ao enviar notificação: %v", err)
+		}
+	}()
+}

@@ -65,3 +65,11 @@ export function ProcessVideoOverlay(arg1, arg2, arg3, arg4) {
 export function SelectVideoFile() {
   return window['go']['main']['App']['SelectVideoFile']();
 }
+
+export function SendDesktopNotification(arg1, arg2) {
+  return window['go']['main']['App']['SendDesktopNotification'](arg1, arg2);
+}
+
+export function SendNotification(arg1, arg2) {
+  return window['go']['main']['App']['SendNotification'](arg1, arg2);
+}

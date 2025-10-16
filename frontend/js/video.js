@@ -1,7 +1,5 @@
 console.log('📹 video.js carregando...');
 
-let notificationPermission = 'default';
-
 let progressStages = {
     'init': { label: 'Inicializando', icon: '⚙️' },
     'metadata': { label: 'Metadados', icon: '📄' },
@@ -17,6 +15,9 @@ let progressStages = {
 let isProcessing = false;
 let progressUnsubscribe = null;
 
+/**
+ * Abre o seletor de arquivos de vídeo e busca o ponto de início automático.
+ */
 async function selectVideo() {
     try {
         const path = await window.go.main.App.SelectVideoFile();
@@ -49,13 +50,14 @@ async function selectVideo() {
     }
 }
 
+/**
+ * Envia a atividade e o vídeo para o backend para processamento do overlay.
+ */
 async function processVideo() {
     if (!selectedActivity || !selectedVideoPath) {
         showMessage(result, 'Selecione uma atividade e um vídeo primeiro.', 'error');
         return;
     }
-
-    await requestNotificationPermission();
 
     try {
         isProcessing = true;
@@ -77,20 +79,19 @@ async function processVideo() {
             console.log('📊 Progresso:', data);
             updateDetailedProgress(data.stage, data.progress, data.message);
         });
-
+        
+        // Escuta conclusão para notificação
         const completionUnsubscribe = window.runtime.EventsOn('video:completed', (data) => {
             if (data.success) {
-                sendDesktopNotification(
+                const fileName = data.outputPath.split(/[\\/]/).pop();
+                window.go.main.App.SendNotification(
                     '✅ Vídeo Processado!',
-                    `Seu vídeo está pronto:\n${data.outputPath.split(/[\\/]/).pop()}`,
+                    `Arquivo pronto: ${fileName}`
                 );
-                
-                // Tocar som (opcional)
-                playNotificationSound();
             } else {
-                sendDesktopNotification(
+                window.go.main.App.SendNotification(
                     '❌ Erro no Processamento',
-                    `Falha ao processar o vídeo: ${data.error}`
+                    data.error
                 );
             }
             completionUnsubscribe();
@@ -125,8 +126,10 @@ async function processVideo() {
         
         const errorMsg = error.toString();
         if (errorMsg.includes('cancelado')) {
+            window.go.main.App.SendNotification('⚠️ Cancelado', 'Processamento cancelado pelo usuário');
             showMessage(result, '⚠️ Processamento cancelado pelo usuário', 'info');
         } else {
+            window.go.main.App.SendNotification('❌ Erro', errorMsg);
             showMessage(result, `Erro no processamento: ${error}`, 'error');
         }
         updateProgress(0);
@@ -148,6 +151,9 @@ async function processVideo() {
     }
 }
 
+/**
+ * Cancela o processamento em andamento
+ */
 async function cancelProcessing() {
     if (!isProcessing) return;
     
@@ -163,6 +169,9 @@ async function cancelProcessing() {
     }
 }
 
+/**
+ * Mostra o botão de cancelar
+ */
 function showCancelButton() {
     let cancelBtn = document.getElementById('cancelProcessBtn');
     
@@ -182,6 +191,9 @@ function showCancelButton() {
     cancelBtn.style.display = 'inline-block';
 }
 
+/**
+ * Esconde o botão de cancelar
+ */
 function hideCancelButton() {
     const cancelBtn = document.getElementById('cancelProcessBtn');
     if (cancelBtn) {
@@ -189,6 +201,9 @@ function hideCancelButton() {
     }
 }
 
+/**
+ * Atualiza a barra de progresso com detalhes do estágio atual
+ */
 function updateDetailedProgress(stage, progressValue, message) {
     const progressBar = document.getElementById('progressBar');
     const progressText = document.getElementById('progressText');
@@ -226,58 +241,12 @@ function updateDetailedProgress(stage, progressValue, message) {
     }
 }
 
-// Função para solicitar permissão de notificação
-async function requestNotificationPermission() {
-    if (!("Notification" in window)) {
-        console.log("Este navegador não suporta notificações desktop");
-        return false;
-    }
-    
-    if (Notification.permission === "granted") {
-        notificationPermission = "granted";
-        return true;
-    }
-    
-    if (Notification.permission !== "denied") {
-        const permission = await Notification.requestPermission();
-        notificationPermission = permission;
-        return permission === "granted";
-    }
-    
-    return false;
-}
-
-// Função para enviar notificação
-function sendDesktopNotification(title, body, icon = null) {
-    if (notificationPermission !== "granted") {
-        console.log("Permissão de notificação não concedida");
-        return;
-    }
-    
-    const notification = new Notification(title, {
-        body: body,
-        icon: icon || '/wails-logo.png', // ou use um ícone personalizado
-        badge: '/wails-logo.png',
-        requireInteraction: false,
-        silent: false
-    });
-    
-    // Auto-fechar após 10 segundos
-    setTimeout(() => notification.close(), 10000);
-    
-    // Focar janela ao clicar
-    notification.onclick = function() {
-        window.focus();
-        notification.close();
-    };
-}
-
-function playNotificationSound() {
-    try {
-        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjSL0vTPfC0GI3S68tycRQsRW67k7qZSEwlBm+HyvWwjBzKHz/TQfC8FI3K18tucQgwOWKrh7qhYFgpGnt/zu3AfBjGByvXTfzYHInCv8NygQQ0NXKfg6KlXEwg9nNrwwXQkBjJ+xvPWgTkHIG+q7NypPw0OXKXd5q1aFgo8l9XuwHgmBTJ8wvLZhj0HIG2m69yrPQ0OXKHh5q1bFQo7ldTvwHkoBDJ7wPLaiD4GIG2k6t2uOwwPXJ7h5KxbFgo6k9LvwHsoBTF4vvHajD4GH2yk6d6vPAwOW53g46xdGAg5kdDuvn0qBDJ3vO/Yjj4GHWmh5+CwOwwOWprf4qtdGAg4j8/tvoErBzF1uu7UkD0FHWec5N+xOgwOWpne4qpaGAg4js3svoIuBzByue3Skj4EHGWa49+yOQwOWZfb4alYFgg4jMrrvoQyBi9vt+zRkz4EG2OY4d+zOQwOWZXY36lXFgg4iszqvoU0Bi9us+rQlD4EG2GW3d6zOQwOWJPX3qlVFgg4iMrpvoY1BS9tse/PlT4EGl+U292zOQwNWJDW3qhUFgg3h8jovoY3Bi9tsO/Olz4EGl6R2+K0OgwNV47V3KdSFgg3hsfovoY4Bi5ssO/OmD4DGl2P2+K0OgwNV43U3KZRFgc2hcXnvoY5Bi5rsO/OmT4DGVyN2+O1OwwMVozT26ZQFgc2g8Tmvoc6BS5qsO/NmT4DGVuL2+O1OwwMVYvR26VPFgc1gsPmvog6BS5psO/Mmj4DGVqJ2+O1OwwMVYvR2qVQFQc1gcHmu4g6BS5psO/Mmj4DGVmH2+O1OwwMVYvR2qVQFQc1gL/mu4g6BS5psO/Mmj4DGVmH2+O1OwwMVYvR2qVQFQc1gL/mu4g6BS5psO/Mmj4DGVmH2+O1OwwMVYvR2qVQFQc1gL/mu4g6BS5psO/Mmj4D'); 
-        audio.volume = 0.3;
-        audio.play().catch(e => console.log('Som não pode ser tocado:', e));
-    } catch (e) {
-        console.log('Erro ao tocar som:', e);
+/**
+ * Limpa mensagem de progresso detalhado
+ */
+function clearProgressMessage() {
+    const messageDiv = document.getElementById('progressMessage');
+    if (messageDiv) {
+        messageDiv.remove();
     }
 }

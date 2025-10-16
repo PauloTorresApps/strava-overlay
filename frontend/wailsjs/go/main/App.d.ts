@@ -34,3 +34,7 @@ export function GetSecureAPIKeys():Promise<Record<string, string>>;
 export function ProcessVideoOverlay(arg1:number,arg2:string,arg3:string,arg4:string):Promise<string>;
 
 export function SelectVideoFile():Promise<string>;
+
+export function SendDesktopNotification(arg1:string,arg2:string):Promise<void>;
+
+export function SendNotification(arg1:string,arg2:string):Promise<void>;
