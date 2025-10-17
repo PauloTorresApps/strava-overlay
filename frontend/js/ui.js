@@ -27,14 +27,6 @@ function updateProgress(value) {
 }
 
 /**
- * NÃO usar mais simulateProgress - agora temos progresso real!
- * Mantida apenas para compatibilidade, mas não deve ser chamada.
- */
-function simulateProgress() {
-    console.warn('⚠️ simulateProgress() está deprecated - usando progresso real agora');
-}
-
-/**
  * Atualiza o estado do botão "Carregar Mais".
  */
 function updateLoadMoreButton(isLoading) {

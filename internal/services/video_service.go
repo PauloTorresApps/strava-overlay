@@ -234,28 +234,6 @@ func (s *VideoService) ValidateVideoFile(videoPath string) error {
 	return fmt.Errorf("unsupported video format: %s. Supported formats: %v", ext, supportedExts)
 }
 
-func (s *VideoService) GetVideoInfo(videoPath string) (*VideoInfo, error) {
-	if err := s.ValidateVideoFile(videoPath); err != nil {
-		return nil, err
-	}
-
-	meta, err := video.GetVideoMetadata(videoPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get video metadata: %w", err)
-	}
-
-	return &VideoInfo{
-		Path:         videoPath,
-		FileName:     filepath.Base(videoPath),
-		Duration:     meta.Duration,
-		Width:        meta.Width,
-		Height:       meta.Height,
-		FrameRate:    meta.FrameRate,
-		CreationTime: meta.CreationTime,
-		Size:         s.getFileSize(videoPath),
-	}, nil
-}
-
 func (s *VideoService) getFileSize(filePath string) int64 {
 	info, err := os.Stat(filePath)
 	if err != nil {
@@ -273,30 +251,6 @@ type VideoInfo struct {
 	FrameRate    float64       `json:"frame_rate"`
 	CreationTime time.Time     `json:"creation_time"`
 	Size         int64         `json:"size_bytes"`
-}
-
-func (vi *VideoInfo) FormatDuration() string {
-	hours := int(vi.Duration.Hours())
-	minutes := int(vi.Duration.Minutes()) % 60
-	seconds := int(vi.Duration.Seconds()) % 60
-
-	if hours > 0 {
-		return fmt.Sprintf("%d:%02d:%02d", hours, minutes, seconds)
-	}
-	return fmt.Sprintf("%d:%02d", minutes, seconds)
-}
-
-func (vi *VideoInfo) FormatSize() string {
-	const unit = 1024
-	if vi.Size < unit {
-		return fmt.Sprintf("%d B", vi.Size)
-	}
-	div, exp := int64(unit), 0
-	for n := vi.Size / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(vi.Size)/float64(div), "KMGTPE"[exp])
 }
 
 func (vi *VideoInfo) GetResolutionString() string {
