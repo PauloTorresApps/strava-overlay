@@ -3,3 +3,6 @@
 *.rpm
 build/bin/
 internal/config/credentials.go
+# Arquivos de configuração sensíveis
+.env.local
+.env.production

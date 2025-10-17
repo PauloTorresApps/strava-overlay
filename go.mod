@@ -5,6 +5,7 @@ go 1.23.0
 require (
 	github.com/fogleman/gg v1.3.0
 	github.com/gen2brain/beeep v0.11.1
+	github.com/joho/godotenv v1.5.1
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/wailsapp/wails/v2 v2.10.2
 	golang.org/x/image v0.12.0

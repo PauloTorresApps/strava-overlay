@@ -2,6 +2,8 @@ package main
 
 import (
 	"embed"
+	"log"
+	"strava-overlay/internal/config"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -12,6 +14,11 @@ import (
 var assets embed.FS
 
 func main() {
+
+	if err := config.LoadConfig(); err != nil {
+		log.Fatalf("❌ Erro ao carregar configurações: %v", err)
+	}
+
 	app := NewApp()
 
 	err := wails.Run(&options.App{

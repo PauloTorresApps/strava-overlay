@@ -37,11 +37,11 @@ type App struct {
 }
 
 func NewApp() *App {
-	clientID := config.STRAVA_CLIENT_ID
-	clientSecret := config.STRAVA_CLIENT_SECRET
+	clientID := config.AppConfig.StravaClientID
+	clientSecret := config.AppConfig.StravaClientSecret
 
 	if clientID == "" || clientSecret == "" {
-		log.Fatal("STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET must be set in internal/config/credentials.go")
+		log.Fatal("STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET must be set")
 	}
 
 	stravaAuth := auth.NewStravaAuth(clientID, clientSecret)
