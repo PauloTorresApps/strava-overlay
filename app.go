@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os/exec"
+	goruntime "runtime"
 	"sync"
 
 	"strava-overlay/internal/auth"
@@ -12,6 +14,7 @@ import (
 	"strava-overlay/internal/services"
 	"strava-overlay/internal/strava"
 
+	"github.com/gen2brain/beeep"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -209,18 +212,33 @@ func (a *App) SendDesktopNotification(title, body string) {
 	})
 }
 
-// SendNotification envia notificação do sistema operacional
+// SendNotification envia notificação nativa do sistema operacional
 func (a *App) SendNotification(title, message string) {
 	go func() {
-		_, err := runtime.MessageDialog(a.ctx, runtime.MessageDialogOptions{
-			Type:          runtime.InfoDialog,
-			Title:         title,
-			Message:       message,
-			Buttons:       []string{"OK"},
-			DefaultButton: "OK",
-		})
-		if err != nil {
-			log.Printf("Erro ao enviar notificação: %v", err)
+		var cmd *exec.Cmd
+
+		switch goruntime.GOOS { // Usa goruntime
+		case "linux":
+			cmd = exec.Command("notify-send", "-u", "normal", "-t", "10000", title, message)
+		case "darwin":
+			script := fmt.Sprintf(`display notification "%s" with title "%s"`, message, title)
+			cmd = exec.Command("osascript", "-e", script)
+		case "windows":
+			err := beeep.Notify(title, message, "")
+			if err != nil {
+				log.Printf("⚠️ Erro notificação Windows: %v", err)
+			}
+			return
+		default:
+			log.Printf("⚠️ SO não suportado para notificações: %s", goruntime.GOOS)
+			return
+		}
+
+		if cmd != nil {
+			err := cmd.Run()
+			if err != nil {
+				log.Printf("⚠️ Erro ao enviar notificação: %v", err)
+			}
 		}
 	}()
 }

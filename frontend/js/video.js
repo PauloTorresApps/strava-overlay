@@ -250,3 +250,21 @@ function clearProgressMessage() {
         messageDiv.remove();
     }
 }
+
+// Listener global para notificações
+if (window.runtime) {
+    window.runtime.EventsOn('system:notification', (data) => {
+        console.log('🔔 Notificação:', data.title, '-', data.message);
+        
+        // Mostra toast visual
+        if (window.toastManager) {
+            window.toastManager.success(data.message, {
+                title: data.title,
+                duration: 10000
+            });
+        } else {
+            // Fallback se toast não existir
+            alert(`${data.title}\n\n${data.message}`);
+        }
+    });
+}
